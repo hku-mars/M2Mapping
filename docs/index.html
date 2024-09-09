@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="Efficient Implicit Neural Reconstruction Using LiDAR is 
+        an implicit reconstruction method that uses LiDAR scans as input, 
+        which is efficient, accurate, and can be applied in various scenarios">
+  <meta name="keywords" content="EINRUL, Implicit Reconstruction, LiDAR">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EINRUL: Efficient Implicit Neural Reconstruction Using LiDAR</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/favicon.ico">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+  <script src="https://cdn.knightlab.com/libs/juxtapose/latest/js/juxtapose.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.knightlab.com/libs/juxtapose/latest/css/juxtapose.css">
+  <style>
+    .grid-container {
+      display: grid;
+      grid-template-columns: auto auto auto auto auto auto;
+      gap: 10px;
+      padding: 0;
+    }
+    
+    .grid-container > div {
+      text-align: center;
+      padding: 0;
+      font-size: 30px;
+    }
+
+    .item1 {
+      grid-column: 1 / 3;
+    }
+    .item2 {
+      grid-column: 3 / 5;
+    }
+    .item3 {
+      grid-column: 5 / 7;
+    }
+  </style>
+</head>
+<body>
+
+<!-- 
+<nav class="navbar" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div class="navbar-menu">
+    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+      <a class="navbar-item" href="https://keunhong.com">
+      <span class="icon">
+          <i class="fas fa-home"></i>
+      </span>
+      </a>
+
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">
+          More Research
+        </a>
+        <div class="navbar-dropdown">
+          <a class="navbar-item" href="http://starydy.xyz/EINRUL/">
+            EINRUL
+          </a>
+          <a class="navbar-item" href="http://starydy.xyz/xxx/">
+            xxx
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
+ -->
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">EINRUL: Efficient Implicit Neural Reconstruction Using LiDAR</h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://github.com/StarRealMan">Dongyu Yan</a><sup>1</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://github.com/shawLyu">Xiaoyang Lyu</a><sup>2</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://jayceeshi.github.io/">Jieqi Shi</a><sup>3</sup> and
+            </span>
+            <span class="author-block">
+              <a href="https://github.com/WayneTimer">Yi Lin</a><sup>4</sup>,
+            </span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>Harbin Institute of Technology, </span>
+            <span class="author-block"><sup>2</sup>The University of Hong Kong, </span>
+            <span class="author-block"><sup>3</sup> Hong Kong University of Science and Technology, </span>
+            <span class="author-block"><sup>4</sup>DJI</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <span class="link-block">
+                <a href="https://arxiv.org/pdf/2302.14363"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Paper</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2302.14363"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Video Link. -->
+              <span class="link-block">
+                <a href="https://www.youtube.com/watch?v=wUp2I-X-IdI"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-youtube"></i>
+                  </span>
+                  <span>Video</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/StarRealMan/EINRUL"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                  </a>
+              </span>
+              <!-- Dataset Link. -->
+              <span class="link-block">
+                <a href="https://drive.google.com/file/d/10Ggh1cv-6MVeMkttL8D75axXOvRR62hW/view?usp=sharing"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="far fa-images"></i>
+                  </span>
+                  <span>Data</span>
+                  </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+
+    <!-- Paper video. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Video</h2>
+        <div class="publication-video">
+          <iframe src="https://www.youtube.com/embed/wUp2I-X-IdI?rel=0&amp;showinfo=0"
+                  frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+    <!--/ Paper video. -->
+
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Modeling scene geometry using implicit neural representation has revealed its advantages
+            in accuracy, flexibility, and low memory usage.
+            Previous approaches have demonstrated impressive results using color or depth images but
+            still have difficulty handling poor light conditions and large-scale scenes.
+            Methods taking global point cloud as input require accurate registration and ground truth
+            coordinate labels, which limits their application scenarios.
+          </p>
+          <p>
+            In this paper, we propose a new method that uses sparse LiDAR point clouds and rough odometry
+            to reconstruct fine-grained implicit occupancy field efficiently within a few minutes.
+            We introduce a new loss function that supervises directly in 3D space without 2D rendering,
+            avoiding information loss.
+            We also manage to refine poses of input frames in an end-to-end manner,
+            creating consistent geometry without global point cloud registration.
+          </p>
+          <p>
+            As far as we know, our method is the first to reconstruct implicit scene representation
+            from LiDAR-only input.<sup>*</sup>
+            Experiments on synthetic and real-world datasets, including indoor and outdoor scenes,
+            prove that our method is effective, efficient, and accurate, obtaining comparable results
+            with existing methods using dense input.
+          </p>
+          <font size=2>* Until the submission of the paper (Sept. 2022)</font>
+        </div>
+      </div>
+    </div>
+    <!--/ Abstract. -->
+
+    <!-- Method. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Method</h2>
+        <img src="./static/images/overview.png" class="center" width="800px">
+        <div class="content has-text-justified">
+          <p>
+            <strong>EINRUL</strong> takes sparse LiDAR frames with rough poses as input and
+            optimizes an implicit representation of the scene in an efficient and accurate way.
+            The rough poses are refined simultaneously to guarantee a consistent geometry.
+            The usage of LiDAR allows it to be applied in various scenarios.
+          </p>
+        </div>
+        <img src="./static/images/thickness.png" class="center" width="800px">
+        <div class="content has-text-justified">
+          <p>
+            The key point of the method is to reconstruct a dense represenation (an implicit model)
+            of the scene with rather sparse input.
+            To overcome it, we present a method to directly supervise in 3D space without 2D rendering,
+            achieving strong supervision while being unbiased and occlusion-aware.
+          </p>
+          <p>
+            Since EINRUL is able to convert sparse depth data into a dense representation,
+            depth completion leveraging multiview information can be achieved as a byproduct.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Method. -->
+
+    <div class="container is-centered has-text-centered">
+      <h2 class="title is-3">Results</h2>
+    </div>
+    <div class="column is-max-desktop">
+      <h3 class="title is-4">ScanNet</h3>
+      <div class="grid-container">
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 90deg 0deg" src="https://starydy.xyz/EINRUL_mesh/0-0.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 90deg 0deg" src="https://starydy.xyz/EINRUL_mesh/0-1.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 90deg 0deg" src="https://starydy.xyz/EINRUL_mesh/0-2.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+      </div>
+      <br>
+
+      <h3 class="title is-4">Replica</h3>
+      <div class="grid-container">
+        <model-viewer style="height: 240px; width: 320px;" orientation="25deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/1-0.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/1-1.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/1-2.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+    </div>
+    <br>
+
+      <h3 class="title is-4">9-Synthetic-Scenes</h3>
+      <div class="grid-container">
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/2-0.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/2-1.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/2-2.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+      </div>
+      <br>
+
+      <h3 class="title is-4">Outdoor AVIA</h3>
+
+      <div class="grid-container">
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 0deg" src="https://starydy.xyz/EINRUL_mesh/3-0.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="40deg 0deg 0deg" src="https://starydy.xyz/EINRUL_mesh/3-1.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 0deg" src="https://starydy.xyz/EINRUL_mesh/3-2.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+      </div>
+      <div class="grid-container">
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/4-0.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/4-1.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+        <model-viewer style="height: 240px; width: 320px;" orientation="0deg 0deg 180deg" src="https://starydy.xyz/EINRUL_mesh/4-2.glb" camera-controls="" auto-rotate="" exposure=".5" generate-schema="" ar-status="not-presenting"></model-viewer>
+      </div>
+      <br>
+
+      <h3 class="title is-4">Depth Completion</h3>
+    </div>
+
+    <br>
+    <div class="columns is-centered has-text-centered">
+      <table border="0" width="100%">
+        <tr>
+          <td width="33%">
+            <img src="./static/images/25.jpg">
+          </td>
+          <td width="33%">
+            <img src="./static/images/25pc.png">
+          </td>
+          <td width="33%">
+            <div class="juxtapose">
+              <img src="./static/images/25sample.jpg" data-label="Pseudo LiDAR"/>
+              <img src="./static/images/25_depth_surf_pseudo.png" data-label="Rendered Depth"/>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td width="33%">
+            <img src="./static/images/176color.png">
+          </td>
+          <td width="33%">
+            <img src="./static/images/176depthpc.png">
+          </td>
+          <td width="33%">
+            <div class="juxtapose">
+              <img src="./static/images/176sample.jpg" data-label="Pseudo LiDAR"/>
+              <img src="./static/images/176_depth_surf_pseudo.png" data-label="Rendered Depth"/>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="columns is-centered has-text-centered">
+              <strong><br>Color</strong>
+            </div>
+          </td>
+          <td>
+            <div class="columns is-centered has-text-centered">
+              <strong><br>GT Depth</strong>
+            </div>
+          </td>
+          <td>
+            <div class="columns is-centered has-text-centered">
+              <strong><br>Pseudo LiDAR vs Rendered Depth</strong>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <script src="https://cdn.knightlab.com/libs/juxtapose/latest/js/juxtapose.min.js"></script>
+      <link rel="stylesheet" href="https://cdn.knightlab.com/libs/juxtapose/latest/css/juxtapose.css">
+    </div>
+    <br>
+
+    <div class="columns is-centered has-text-centered">
+      <table border="0" width="100%">
+        <tr>
+          <td width="42%">
+            <img src="./static/images/71sample.png">
+          </td>
+          <td width="28%">
+            <img src="./static/images/71_depth_surf_pseudo.png">
+          </td>
+          <td width="28%">
+            <img src="./static/images/71_phong.jpg">
+          </td>
+        </tr>
+        <tr>
+          <td width="43.6%">
+            <img src="./static/images/746sample.png">
+          </td>
+          <td width="28.2%">
+            <img src="./static/images/764_depth_surf_pseudo.png">
+          </td>
+          <td width="28.2%">
+            <img src="./static/images/764_phong.jpg">
+          </td>
+        </tr>
+        <tr>
+          <td width="43.6%">
+            <div class="columns is-centered has-text-centered">
+              <strong><br>LiDAR Pointcloud</strong>
+            </div>
+          </td>
+          <td width="28.2%">
+            <div class="columns is-centered has-text-centered">
+              <strong><br>Rendered Depth</strong>
+            </div>
+          </td>
+          <td width="28.2%">
+            <div class="columns is-centered has-text-centered">
+              <strong><br>Rendered Mesh</strong>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@InProceedings{yan2023efficient,
+      author = {Dongyu Yan, Xiaoyang Lyu, Jieqi Shi, Yi Lin},
+      title = {Efficient Implicit Neural Reconstruction Using LiDAR},
+      booktitle={2023 IEEE International Conference on Robotics and Automation (ICRA)},
+      year = {2023}}
+</code></pre>
+  </div>
+</section>
+
+
+<footer class="footer">
+  <div class="container">
+    <div class="content has-text-centered">
+      <a class="icon-link"
+         href="https://arxiv.org/pdf/2302.14363">
+        <i class="fas fa-file-pdf"></i>
+      </a>
+      <a class="icon-link" href="https://github.com/StarRealMan" class="external-link" disabled>
+        <i class="fab fa-github"></i>
+      </a>
+    </div>
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            This website is licensed under a <a rel="license"
+                                                href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+          <p>
+            We really appreciate  <a
+            href="https://nerfies.github.io/">Nerfies</a>
+            for providing the <a
+            href="https://github.com/nerfies/nerfies.github.io">source code</a> of the website template.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
