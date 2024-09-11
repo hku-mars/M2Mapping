@@ -9,7 +9,7 @@ A MultiModal Mapping (M2Mapping) Framework for LiDAR-Visual Systems.
 
 Our paper is currently undergoing peer review. The code will be released once the paper is accepted.
 
-[Project page](https://jianhengliu.github.io/Projects/M2Mapping/) | [Paper](https://arxiv.org/pdf/2409.05310) | [Video](https://www.youtube.com/watch?v=NRlOa7oKDDQ)
+[Project page](https://jianhengliu.github.io/Projects/M2Mapping/) | [Paper](https://arxiv.org/pdf/2409.05310) | [Video](https://www.youtube.com/watch?v=XFzzAGVbzek)
 
 ### 2. Related paper
 
