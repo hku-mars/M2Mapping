@@ -66,6 +66,8 @@ unzip -d src/M2Mapping/data replica_extra_eval.zip
 ### 4. Run
 
 ```bash
+    source devel/setup.bash # or setup.zsh
+
     # Replica
     ./devel/lib/neural_mapping/neural_mapping_node train src/M2Mapping/config/replica/replica.yaml src/M2Mapping/data/Replica/room2
     # If ROS is installed, you can also run the following command:
@@ -86,6 +88,7 @@ After running, the training and evaluation results will be saved in the `src/M2M
 
 For afterward visualization/evaluation, you can use the following command:
 ```bash
+    source devel/setup.bash # or setup.zsh
     ./devel/lib/neural_mapping/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node view src/M2Mapping/output/(your_output_folder)
