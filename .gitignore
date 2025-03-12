@@ -1,0 +1,7 @@
+**/build/**
+**/.vscode/**
+**/__pycache__/**
+**/output/**
+
+*.pyc
+neural_mapping/output
