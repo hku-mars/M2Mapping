@@ -98,9 +98,13 @@ Input `h` + `Enter` to see the help message.
 ### 5. Visualization
 
 - Tested on Ubuntu 20.04, cuda 11.8, ROS Noetic
-- We use RVIZ for visualization for now. Please install ROS Noetic following the [official guide](http://wiki.ros.org/noetic/Installation/Ubuntu).
+- We use RVIZ for visualization for now. Please install ROS Noetic following the [official guide](http://wiki.ros.org/noetic/Installation/Ubuntu) or refer to the [Docker](#6-docker) 'ROS Installation' section.
 - Re-build the packege: 
   ```bash
+  cd src
+  git clone https://github.com/jianhengLiu/rviz_map_plugin.git
+  git clone https://github.com/jianhengLiu/rviz_cinematographer.git
+  sudo apt install ros-noetic-mesh-msgs ros-noetic-rviz-animated-view-controller ros-noetic-hdf5-map-io
   catkin_make -DENABLE_ROS=ON
   ```
 - Run the following command to visualize the map in real-time:
