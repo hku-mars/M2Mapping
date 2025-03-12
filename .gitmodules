@@ -1,0 +1,15 @@
+[submodule "submodules/llog"]
+	path = submodules/llog
+	url = https://github.com/jianhengLiu/llog.git
+[submodule "submodules/kaolin_wisp_cpp"]
+	path = submodules/kaolin_wisp_cpp
+	url = https://github.com/jianhengLiu/kaolin_wisp_cpp.git
+[submodule "submodules/tcnn_binding"]
+	path = submodules/tcnn_binding
+	url = https://github.com/jianhengLiu/tcnn_binding.git
+[submodule "submodules/nerfacc_cpp"]
+	path = submodules/nerfacc_cpp
+	url = https://github.com/jianhengLiu/nerfacc_cpp.git
+[submodule "submodules/ply_utils"]
+	path = submodules/ply_utils
+	url = https://github.com/jianhengLiu/ply_utils.git

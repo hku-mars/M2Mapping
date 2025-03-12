@@ -1,0 +1,31 @@
+%YAML:1.0
+# rosrun neural_mapping neural_mapping_node src/RIM2/rim/config/neural_rgbd/neural_rgbd.yaml src/RIM2/data/neural_rgbd_data/kitchen_kitti_format
+
+base_config: "../base.yaml"
+
+preload: 1 # 0: disable; 1: enable # accelerate the loading process but will cost more memory
+llff: 1 # 0: disable; 1: enable; every 8 frame will be used for evaluation
+prob_map_en: 1 # 0: disable; 1: enable; Whether the map is a probabilistic map
+
+# dataset_type
+#   Replica = 0,
+#   R3live = 1,
+#   NeuralRGBD = 2,
+#   KITTI = 3,
+#   FastLivo = 4,
+dataset_type: 4
+dir_embedding_degree: 4
+
+min_range: 0.01
+ds_pt_num: 10000 # downsampled point number
+max_pt_num: 1000000
+
+outlier_remove: 1 # unnecessary for static scenes
+outlier_dist: 0.05
+outlier_removal_interval: 2000
+
+# visualization
+vis_attribute: 2 # 0: disable to save storage; 1: normal; 2: color
+vis_resolution: 0.1 # better no more than leaf_sizes or will miss faces
+export_resolution: 0.04
+fps: 10

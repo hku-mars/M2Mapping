@@ -1,0 +1,50 @@
+%YAML:1.0
+# rosrun neural_mapping neural_mapping_node src/RIM2/neural_mapping/config/neural_rgbd/neural_rgbd.yaml src/RIM2/data/neural_rgbd_data/kitchen_kitti_format
+
+base_config: "../base.yaml"
+
+iter_step: 20000
+
+trace_iter: 50 # sphere tracing iteration times
+
+preload: 1 # 0: disable; 1: enable # accelerate the loading process but will cost more memory
+llff: 0 # 0: disable; 1: enable; every 8 frame will be used for evaluation
+cull_mesh: 1
+prob_map_en: 0 # 0: disable; 1: enable; Whether the map is a probabilistic map
+
+# dataset_type
+#   Replica = 0,
+#   R3live = 1,
+#   NeuralRGBD = 2,
+#   KITTI = 3,
+#   FastLivo = 4,
+dataset_type: 0
+
+dir_embedding_degree: 0
+
+map:
+   map_origin: !!opencv-matrix
+      rows: 1
+      cols: 3
+      dt: d
+      data: [ 0, 0, 0 ]
+   map_size: 14
+
+min_range: 0.0
+ds_pt_num: 10000 # downsampled point number
+max_pt_num: 1000000
+
+leaf_sizes: 0.05
+fill_level: 1
+bce_sigma: 0.02
+sphere_trace_thr: 1e-3
+
+outlier_removal_interval: 2000
+outlier_remove: 0 # unnecessary for static scenes
+outlier_dist: 0.05
+
+# visualization
+vis_attribute: 2 # 0: disable to save storage; 1: normal; 2: color
+vis_resolution: 0.1 # better no more than leaf_sizes or will miss faces
+export_resolution: 0.01
+fps: 30
