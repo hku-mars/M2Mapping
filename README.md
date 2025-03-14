@@ -11,14 +11,11 @@ A MultiModal Mapping (M2Mapping) Framework for LiDAR-Visual Systems.
 
 Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic research, please cite the following paper:
 ```
-@misc{liu2024neural,
+@article{liu2024neural,
     title={Neural Surface Reconstruction and Rendering for LiDAR-Visual Systems}, 
     author={Jianheng Liu and Chunran Zheng and Yunfei Wan and Bowen Wang and Yixi Cai and Fu Zhang},
+    journal={arXiv preprint arXiv:2108.10470},
     year={2024},
-    eprint={2409.05310},
-    archivePrefix={arXiv},
-    primaryClass={cs.RO},
-    url={https://arxiv.org/abs/2409.05310}, 
     }
 ```
 
