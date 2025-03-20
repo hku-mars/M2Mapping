@@ -1,4 +1,5 @@
 #include "neural_mapping.h"
+#include "utils/coordinates.h"
 
 #ifdef ENABLE_ROS
 #include <tf/transform_broadcaster.h>

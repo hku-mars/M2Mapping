@@ -12,10 +12,10 @@ set(CMAKE_CXX_FLAGS "-fPIC")
 add_definitions(-O3 -DWITH_CUDA -DTHRUST_IGNORE_CUB_VERSION_CHECK)
 
 option(ENABLE_ROS "Enable ROS support" OFF)
-# add_definitions(-DENABLE_ROS)
 
 if(ENABLE_ROS)
   message("ROS ENABLED")
+  add_definitions(-DENABLE_ROS)
   find_package(
     catkin REQUIRED
     COMPONENTS roscpp
@@ -56,8 +56,7 @@ include_directories(submodules/llog/include)
 # 指定libTorch位置
 find_package(Torch REQUIRED)
 
-# find_package(PythonLibs REQUIRED)
-# include_directories(${PYTHON_INCLUDE_DIRS})
+# find_package(PythonLibs REQUIRED) include_directories(${PYTHON_INCLUDE_DIRS})
 
 # ROG-Map
 add_subdirectory(submodules/ROG-Map/rog_map)

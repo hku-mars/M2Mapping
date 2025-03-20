@@ -302,8 +302,8 @@ void LocalMap::meshing_(ros::Publisher &mesh_pub,
       break;
     }
 
-    pub_mesh(_mesh_pub, _mesh_color_pub, vertices_cu, faces_cu, color_cu,
-             _header, _uuid);
+    pub_mesh(mesh_pub, mesh_color_pub, vertices_cu, faces_cu, color_cu, header,
+             uuid);
 
     if (_save) {
       faces_cu = faces_cu + count;
