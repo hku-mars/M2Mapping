@@ -111,16 +111,16 @@ NeuralSLAM::NeuralSLAM(const int &mode,
       cv::Mat cv_ray_range;
       fsSettings["fsm_node"]["rog_map"]["raycasting"]["ray_range"] >>
           cv_ray_range;
-      cfg.raycast_range_min = cv_ray_range.at<float>(0);
-      cfg.raycast_range_max = cv_ray_range.at<float>(1);
+      cfg.raycast_range_min = cv_ray_range.at<double>(0);
+      cfg.raycast_range_max = cv_ray_range.at<double>(1);
 
       // Local update box
       cv::Mat cv_local_update_box;
       fsSettings["fsm_node"]["rog_map"]["raycasting"]["local_update_box"] >>
           cv_local_update_box;
-      cfg.local_update_box_d = {cv_local_update_box.at<float>(0),
-                                cv_local_update_box.at<float>(1),
-                                cv_local_update_box.at<float>(2)};
+      cfg.local_update_box_d = {cv_local_update_box.at<double>(0),
+                                cv_local_update_box.at<double>(1),
+                                cv_local_update_box.at<double>(2)};
 
       // Height constraints
       fsSettings["fsm_node"]["rog_map"]["virtual_ground_height"] >>
