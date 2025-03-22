@@ -5,14 +5,6 @@
 # The points [out of local map] is considered to be [OUT_OF_MAP]
 # The points [out of virtual ceil or ground] is considered to be [OCCUPIED]
 fsm_node:
-  # bag_name: "/home/marslab-orin/catkin_ec/bags/2023-03-30-18-17-57-exploration-success.bag"
-  # bag_name: "/home/mars/yixi_ws/bags/2023-03-30-18-17-57-exploration-success.bag"
-  # bag_name: "/home/mars/yixi_ws/bags/LG_machine_demap.bag"
-  # bag_name: "/home/amov/ws_nx/bags/hector_straight.bag"
-  bag_name: "/media/chrisliu/Expansion/Projects_bck/RIM/Datasets/r3live/hku_main_building_r3live_nl_input.bag"
-
-  output_name: "/home/mars/yixi_ws/bags/avia_LG"
-
   rog_map:
     map_sliding:
       enable: false
@@ -23,29 +15,6 @@ fsm_node:
     fix_map_origin: [0, 0, 0]
 
     frontier_extraction_en: false
-
-    # If [enbale = true], the ROG-Map will actively take ros topic as input.
-    #  else user should call function [updateMap] to update the map.h
-    ros_callback:
-      enable: false
-      # cloud_topic: "/cloud_registered"
-      # odom_topic: "/lidar_slam/odom"
-      # cloud_topic: "/velodyne_points"
-      # odom_topic: "/ground_truth/state"
-      cloud_topic: "/cloud_registered"
-      odom_topic: "/Odometry"
-      odom_timeout: 2.0
-
-    visulization:
-      enbale: false
-      # The rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
-      time_rate: 10
-      # The frame rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
-      frame_rate: 0
-      # visualization range along the odom [m].
-      range: [8, 8, 8]
-      frame_id: "world"
-      pub_unknown_map_en: false
 
     resolution: 0.1
     inflation_en: false
@@ -83,16 +52,20 @@ fsm_node:
         data: [0.0, 40]
 
       # logit: log((x)/(1-(x)))
-      p_min: 0.03 # l_min: -1.9924301646902063
-      p_miss: 0.49 # l_miss: -0.04000533461369925 (6->free) should be less than 0.5
-      p_free: 0.05 # l_free: -0.20067069546215124 # as low as possible to filter noise
-      p_occ: 0.7 # l_occ: 2.1972245773362196 1.3862943611198908
-      p_hit: 0.9 # l_hit: 0.8472978603872034 (1->occ)
-      p_max: 0.97 # l_max: 3.4760986898352724 (2->maxZ)
+      p_min: 0.12
+      p_miss: 0.49
+      p_free: 0.499
+      p_occ: 0.6 # we set it to 0.6 to make the map more conservative
+      p_hit: 0.9
+      p_max: 0.98
       # The threshold of a non-occupied inf map grid to be considered as free. [0.0-1.0]
-      # which means for a gird contains [u] unknown grids and [f] known free grids.
-      # if [f/(f+u) > inf_map_known_free_thresh], the grid will be considered as free.
-      #  e.g. this thresh is set to 1.0, it measn a inf map grid is considered as free only if all grids in it are known free.
+      # for counter map, if each cell contains N cells in prob map, then only when
+      # N_unk > N * unk_thresh cells are unknown, the cell will be considered as unknown.
+      # example: 1) if unk_thresh is set 0.0, then once at least one cell in prob map is unknown,
+      #             the cell will be considered as unknown.
+      #         2) if unk_thresh is set to 1.0, then only all cells in prob map are unknown,
+      #             the cell will be considered as unknown.
+      # in all, 1.0 is more aggressive while 0.0 is more conservative.
       inf_map_known_free_thresh: 0.2
 
     gpu:
