@@ -59,8 +59,8 @@ find_package(Torch REQUIRED)
 # find_package(PythonLibs REQUIRED) include_directories(${PYTHON_INCLUDE_DIRS})
 
 # ROG-Map
-add_subdirectory(submodules/ROG-Map/rog_map)
-include_directories(submodules/ROG-Map/rog_map/include)
+add_subdirectory(submodules/ROG-Map)
+include_directories(submodules/ROG-Map/include)
 
 include_directories(${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR}
                     ${PCL_INCLUDE_DIRS} include)

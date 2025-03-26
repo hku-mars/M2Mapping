@@ -21,7 +21,8 @@ extern std::filesystem::path k_output_path, k_package_path;
 
 extern torch::Device k_device;
 // parameter
-extern float k_x_max, k_x_min, k_y_max, k_y_min, k_z_max, k_z_min, k_min_range;
+extern float k_x_max, k_x_min, k_y_max, k_y_min, k_z_max, k_z_min, k_min_range,
+    k_max_range;
 extern float k_inner_map_size, k_map_size, k_map_size_inv, k_boundary_size;
 extern float k_leaf_size, k_leaf_size_inv;
 extern int k_octree_level, k_fill_level;
@@ -70,3 +71,5 @@ void read_params(const std::filesystem::path &_config_path,
                  const bool &_new_dir = true);
 void read_scene_params(const std::filesystem::path &_scene_config_path);
 void read_base_params(const std::filesystem::path &_base_config_path);
+void write_pt_params();
+void read_pt_params();

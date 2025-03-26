@@ -13,3 +13,7 @@
 [submodule "submodules/ply_utils"]
 	path = submodules/ply_utils
 	url = https://github.com/jianhengLiu/ply_utils.git
+[submodule "submodules/ROG-Map"]
+	path = submodules/ROG-Map
+	url = https://github.com/jianhengLiu/ROG-Map.git
+	branch = neural_mapping

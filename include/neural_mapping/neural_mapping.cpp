@@ -29,12 +29,6 @@ NeuralSLAM::NeuralSLAM(const int &mode,
 
   read_params(_config_path, _data_path, mode);
 
-  local_map_ptr = std::make_shared<LocalMap>(
-      k_map_origin, k_x_min, k_x_max, k_y_min, k_y_max, k_z_min, k_z_max);
-  for (auto &p : local_map_ptr->named_parameters()) {
-    cout << p.key() << p.value().sizes() << '\n';
-  }
-
   data_loader_ptr = std::make_unique<dataloader::DataLoader>(
       k_dataset_path, k_dataset_type, k_device, mode & k_preload, k_res_scale,
       k_sensor);
@@ -47,103 +41,9 @@ NeuralSLAM::NeuralSLAM(const int &mode,
   }
 
   if (mode) {
-    torch::optim::AdamOptions adam_options;
-    adam_options.lr(k_lr);
-    adam_options.amsgrad(true);
-    adam_options.eps(1e-15);
-
-    p_optimizer_ = std::make_shared<torch::optim::Adam>(
-        local_map_ptr->parameters(), adam_options);
-
-    if (k_prob_map_en) {
-      // Initialize ROG-Map configuration
-      auto rog_map_cfg_file = k_package_path / "config/ROG-Map/rog.yaml";
-      std::cout << "Loading ROG-Map config from: " << rog_map_cfg_file
-                << std::endl;
-
-      cv::FileStorage fsSettings(rog_map_cfg_file, cv::FileStorage::READ);
-      if (!fsSettings.isOpened()) {
-        std::cerr << "ERROR: Could not open settings at: " << rog_map_cfg_file
-                  << std::endl;
-        exit(-1);
-      }
-
-      // Create and configure ROG-Map settings
-      rog_map::ROGMapConfig cfg;
-
-      // Basic map settings
-      cfg.resolution = k_leaf_size;
-      cfg.inflation_resolution = k_leaf_size;
-      cfg.safe_margin = 0.1f;
-      cfg.block_inf_pt = true;
-      cfg.map_sliding_en = false;
-      cfg.frontier_extraction_en = false;
-      cfg.inflation_en = false;
-      cfg.inflation_step = 1;
-      cfg.intensity_thresh = -1;
-      cfg.point_filt_num = 1;
-
-      // Map size and origin
-      cfg.fix_map_origin = {k_map_origin[0].item<float>(),
-                            k_map_origin[1].item<float>(),
-                            k_map_origin[2].item<float>()};
-      cfg.map_size_d = {k_inner_map_size, k_inner_map_size, k_inner_map_size};
-
-      // Map sliding threshold
-      fsSettings["fsm_node"]["rog_map"]["map_sliding"]["threshold"] >>
-          cfg.map_sliding_thresh;
-
-      // Raycasting configuration
-      cfg.raycasting_en = true;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["batch_update_size"] >>
-          cfg.batch_update_size;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]
-                ["inf_map_known_free_thresh"] >>
-          cfg.known_free_thresh;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_hit"] >> cfg.p_hit;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_miss"] >> cfg.p_miss;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_min"] >> cfg.p_min;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_max"] >> cfg.p_max;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_occ"] >> cfg.p_occ;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_free"] >> cfg.p_free;
-
-      // Ray range settings
-      cv::Mat cv_ray_range;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["ray_range"] >>
-          cv_ray_range;
-      cfg.raycast_range_min = cv_ray_range.at<double>(0);
-      cfg.raycast_range_max = cv_ray_range.at<double>(1);
-
-      // Local update box
-      cv::Mat cv_local_update_box;
-      fsSettings["fsm_node"]["rog_map"]["raycasting"]["local_update_box"] >>
-          cv_local_update_box;
-      cfg.local_update_box_d = {cv_local_update_box.at<double>(0),
-                                cv_local_update_box.at<double>(1),
-                                cv_local_update_box.at<double>(2)};
-
-      // Height constraints
-      fsSettings["fsm_node"]["rog_map"]["virtual_ground_height"] >>
-          cfg.virtual_ground_height;
-      fsSettings["fsm_node"]["rog_map"]["virtual_ceil_height"] >>
-          cfg.virtual_ceil_height;
-
-      // GPU settings
-      fsSettings["fsm_node"]["rog_map"]["gpu"]["GPU_BLOCKSIZE"] >>
-          cfg.GPU_BLOCKSIZE;
-      fsSettings["fsm_node"]["rog_map"]["gpu"]["CLOUD_BUFFER_SIZE"] >>
-          cfg.CLOUD_BUFFER_SIZE;
-
-      // Initialize ROG-Map
-      rog_map::ROSParamLoader ros_param_loader;
-      ros_param_loader.initConfig(cfg);
-      rog_map_ptr = std::make_shared<rog_map::ROGMap>(cfg);
-    }
-
     mapper_thread = std::thread(&NeuralSLAM::batch_train, this);
     keyboard_thread = std::thread(&NeuralSLAM::keyboard_loop, this);
     misc_thread = std::thread(&NeuralSLAM::misc_loop, this);
-
   } else {
     k_output_path = _config_path.parent_path().parent_path().parent_path();
     load_pretrained(k_output_path);
@@ -625,29 +525,164 @@ bool NeuralSLAM::build_occ_map() {
   static auto timer_cal_prior = llog::CreateTimer("cal_prior");
   timer_cal_prior->tic();
 
+  auto pcl_depth =
+      data_loader_ptr->dataparser_ptr_->train_depth_pack_.depth.view({-1});
+  auto valid_mask = (pcl_depth > k_min_range) & (pcl_depth < k_max_range);
+  auto valid_idx = valid_mask.nonzero().squeeze();
+
+  auto pcl =
+      data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3})
+          .index_select(0, valid_idx);
+  // calculate pcl's center
+  // and radius
+  auto pcl_center = pcl.mean(0).squeeze();
+  auto pcl_radius = (pcl - pcl_center).norm(2, 1).max().item<float>();
+
+  std::cout << "PCL center: " << pcl_center << ", radius: " << pcl_radius
+            << '\n';
+
+  // set local map's center and radius
+  {
+    k_map_origin = pcl_center;
+    if (k_inner_map_size < pcl_radius * 2.0f) {
+      std::cout << "Warning: inner map size is smaller than pcl radius * 2.0\n";
+    } else {
+      k_inner_map_size = pcl_radius * 2.0f;
+    }
+    k_x_max = 0.5f * k_inner_map_size;
+    k_y_max = k_x_max;
+    k_z_max = k_x_max;
+    k_x_min = -0.5f * k_inner_map_size;
+    k_y_min = k_x_min;
+    k_z_min = k_x_min;
+    k_octree_level =
+        ceil(log2((k_inner_map_size + 2 * k_leaf_size) * k_leaf_size_inv));
+    k_map_resolution = std::pow(2, k_octree_level);
+    k_map_size = k_map_resolution * k_leaf_size;
+    k_map_size_inv = 1.0f / k_map_size;
+
+    if (k_fill_level > k_octree_level) {
+      k_fill_level = k_octree_level;
+    }
+  }
+
+  local_map_ptr = std::make_shared<LocalMap>(
+      k_map_origin, k_x_min, k_x_max, k_y_min, k_y_max, k_z_min, k_z_max);
+  for (auto &p : local_map_ptr->named_parameters()) {
+    cout << p.key() << p.value().sizes() << '\n';
+  }
+
+  auto inrange_idx =
+      local_map_ptr->get_inrange_mask(pcl).squeeze().nonzero().squeeze();
+  auto inrange_pt = pcl.index_select(0, inrange_idx).cuda();
+
   //----------------------------------------------------------------------
   // SECTION 1: Process depth data for occupancy mapping
   //----------------------------------------------------------------------
+  if (k_prob_map_en) {
+    // Initialize ROG-Map configuration
+    auto rog_map_cfg_file = k_package_path / "config/ROG-Map/rog.yaml";
+    std::cout << "Loading ROG-Map config from: " << rog_map_cfg_file
+              << std::endl;
 
-  // Create progress bar for depth processing
-  auto depth_iter_bar =
-      tq::trange(data_loader_ptr->dataparser_ptr_->train_depth_poses_.size(0));
-  depth_iter_bar.set_prefix("Depth RayCasting");
+    cv::FileStorage fsSettings(rog_map_cfg_file, cv::FileStorage::READ);
+    if (!fsSettings.isOpened()) {
+      std::cerr << "ERROR: Could not open settings at: " << rog_map_cfg_file
+                << std::endl;
+      exit(-1);
+    }
 
-  for (auto i : depth_iter_bar) {
-    // Get camera pose and corresponding XYZ points
-    auto pose =
-        data_loader_ptr->dataparser_ptr_->get_pose(i, dataparser::TrainDepth);
-    auto xyz = data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz[i];
+    // Create and configure ROG-Map settings
+    rog_map::ROGMapConfig cfg;
+
+    // Basic map settings
+    cfg.resolution = k_leaf_size;
+    cfg.inflation_resolution = k_leaf_size;
+    cfg.safe_margin = 0.1f;
+    cfg.block_inf_pt = true;
+    cfg.map_sliding_en = false;
+    cfg.frontier_extraction_en = false;
+    cfg.inflation_en = false;
+    cfg.inflation_step = 1;
+    cfg.intensity_thresh = -1;
+    cfg.point_filt_num = 1;
+
+    // Map size and origin
+    cfg.fix_map_origin = {k_map_origin[0].item<float>(),
+                          k_map_origin[1].item<float>(),
+                          k_map_origin[2].item<float>()};
+    cfg.map_size_d = {k_inner_map_size, k_inner_map_size, k_inner_map_size};
+
+    // Map sliding threshold
+    fsSettings["fsm_node"]["rog_map"]["map_sliding"]["threshold"] >>
+        cfg.map_sliding_thresh;
+
+    // Raycasting configuration
+    cfg.raycasting_en = true;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["batch_update_size"] >>
+        cfg.batch_update_size;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]
+              ["inf_map_known_free_thresh"] >>
+        cfg.known_free_thresh;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_hit"] >> cfg.p_hit;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_miss"] >> cfg.p_miss;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_min"] >> cfg.p_min;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_max"] >> cfg.p_max;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_occ"] >> cfg.p_occ;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["p_free"] >> cfg.p_free;
+
+    // Ray range settings
+    cv::Mat cv_ray_range;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["ray_range"] >>
+        cv_ray_range;
+    cfg.raycast_range_min = cv_ray_range.at<double>(0);
+    cfg.raycast_range_max = cv_ray_range.at<double>(1);
+
+    // Local update box
+    cv::Mat cv_local_update_box;
+    fsSettings["fsm_node"]["rog_map"]["raycasting"]["local_update_box"] >>
+        cv_local_update_box;
+    cfg.local_update_box_d = {cv_local_update_box.at<double>(0),
+                              cv_local_update_box.at<double>(1),
+                              cv_local_update_box.at<double>(2)};
+
+    // Height constraints
+    fsSettings["fsm_node"]["rog_map"]["virtual_ground_height"] >>
+        cfg.virtual_ground_height;
+    fsSettings["fsm_node"]["rog_map"]["virtual_ceil_height"] >>
+        cfg.virtual_ceil_height;
+
+    // GPU settings
+    fsSettings["fsm_node"]["rog_map"]["gpu"]["GPU_BLOCKSIZE"] >>
+        cfg.GPU_BLOCKSIZE;
+    fsSettings["fsm_node"]["rog_map"]["gpu"]["CLOUD_BUFFER_SIZE"] >>
+        cfg.CLOUD_BUFFER_SIZE;
+
+    // Initialize ROG-Map
+    rog_map::ROSParamLoader ros_param_loader;
+    ros_param_loader.initConfig(cfg);
+
+    rog_map_ptr = std::make_shared<rog_map::ROGMap>(cfg);
+
+    // Create progress bar for depth processing
+    auto depth_iter_bar = tq::trange(
+        data_loader_ptr->dataparser_ptr_->train_depth_poses_.size(0));
+    depth_iter_bar.set_prefix("Depth RayCasting");
+
+    for (auto i : depth_iter_bar) {
+      // Get camera pose and corresponding XYZ points
+      auto pose =
+          data_loader_ptr->dataparser_ptr_->get_pose(i, dataparser::TrainDepth);
+      auto xyz = data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz[i];
 
 #ifdef ENABLE_ROS
-    // Publish pose and pointcloud for visualization if ROS is enabled
-    pub_pose(pose);
-    pub_pointcloud(pointcloud_pub, xyz);
+      // Publish pose and pointcloud for visualization if ROS is enabled
+      pub_pose(pose);
+      pub_pointcloud(pointcloud_pub, xyz);
 #endif
 
-    // If probability mapping is enabled, update the ROG-Map
-    if (k_prob_map_en) {
+      // If probability mapping is enabled, update the ROG-Map
+
       // Note: If an illegal memory access error occurs, the pointcloud may be
       // too dense
       rog_map::PointCloudHost rog_cloud;
@@ -663,13 +698,11 @@ bool NeuralSLAM::build_occ_map() {
       rog_cloud = utils::tensor_to_pointcloud(xyz);
       rog_map_ptr->updateMap(rog_cloud, rog_pose);
     }
-  }
 
-  //----------------------------------------------------------------------
-  // SECTION 2: Process occupancy data from probability map (if enabled)
-  //----------------------------------------------------------------------
+    //----------------------------------------------------------------------
+    // SECTION 2: Process occupancy data from probability map (if enabled)
+    //----------------------------------------------------------------------
 
-  if (k_prob_map_en) {
     // Extract occupied cells from ROG-Map
     type_utils::vec_E<type_utils::Vec3f> prob_occ_map;
     rog_map_ptr->boxSearchBatch(rog_map_ptr->local_map_bound_min_d_,
@@ -841,6 +874,13 @@ void NeuralSLAM::batch_train() {
   static auto p_timer = llog::CreateTimer("build_occ_map");
   p_timer->tic();
   build_occ_map();
+
+  torch::optim::AdamOptions adam_options;
+  adam_options.lr(k_lr);
+  adam_options.amsgrad(true);
+  adam_options.eps(1e-15);
+  p_optimizer_ = std::make_shared<torch::optim::Adam>(
+      local_map_ptr->parameters(), adam_options);
   p_timer->toc_sum();
 
   static auto p_train = llog::CreateTimer("train");
@@ -1265,11 +1305,15 @@ void NeuralSLAM::export_checkpoint() {
   if (!k_output_path.empty()) {
     auto save_path = k_output_path / ("local_map_checkpoint.pt");
     torch::save(local_map_ptr, save_path);
+    write_pt_params();
   }
 }
 
 void NeuralSLAM::load_checkpoint(
     const std::filesystem::path &_checkpoint_path) {
+  read_pt_params();
+  local_map_ptr = std::make_shared<LocalMap>(
+      k_map_origin, k_x_min, k_x_max, k_y_min, k_y_max, k_z_min, k_z_max);
   torch::load(local_map_ptr, _checkpoint_path / "local_map_checkpoint.pt");
 }
 

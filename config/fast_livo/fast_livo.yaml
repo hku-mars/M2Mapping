@@ -16,6 +16,7 @@ dataset_type: 4
 dir_embedding_degree: 4
 
 min_range: 0.01
+max_range: 100
 ds_pt_num: 10000 # downsampled point number
 max_pt_num: 1000000
 

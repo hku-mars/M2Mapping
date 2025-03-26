@@ -22,7 +22,8 @@ std::filesystem::path k_output_path, k_package_path;
 
 torch::Device k_device = torch::kCPU;
 // parameter
-float k_x_max, k_x_min, k_y_max, k_y_min, k_z_max, k_z_min, k_min_range;
+float k_x_max, k_x_min, k_y_max, k_y_min, k_z_max, k_z_min, k_min_range,
+    k_max_range;
 
 float k_inner_map_size, k_map_size, k_map_size_inv, k_boundary_size;
 
@@ -252,6 +253,7 @@ void read_scene_params(const std::filesystem::path &_scene_config_path) {
   }
 
   fsSettings["min_range"] >> k_min_range;
+  fsSettings["max_range"] >> k_max_range;
 
   fsSettings["outlier_remove"] >> k_outlier_remove;
   fsSettings["outlier_dist"] >> k_outlier_dist;
@@ -352,4 +354,45 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
   fsSettings["export_train_pcl"] >> k_export_train_pcl;
   fsSettings.release();
   print_files(params_file_path);
+}
+
+void write_pt_params() {
+  auto pt_config_file = k_output_path / "config/scene/pt.yaml";
+  std::ofstream ofs(pt_config_file);
+  ofs << "%YAML:1.0\n";
+  cv::Mat cv_map_origin(1, 3, CV_32FC1, k_map_origin.data_ptr());
+  ofs << "map_origin: !!opencv-matrix\n   rows: 1\n   cols: 3\n   dt: f\n"
+         "   data: "
+      << cv_map_origin << '\n';
+  ofs << "inner_map_size: " << k_inner_map_size << '\n';
+}
+
+void read_pt_params() {
+  auto pt_config_file = k_output_path / "config/scene/pt.yaml";
+  cv::FileStorage fsSettings(pt_config_file, cv::FileStorage::READ);
+  if (!fsSettings.isOpened()) {
+    std::cerr << "ERROR: Wrong path to settings: " << pt_config_file << "\n";
+    exit(-1);
+  }
+  cv::Mat cv_map_origin = cv::Mat::zeros(3, 1, CV_32FC1);
+  fsSettings["map_origin"] >> cv_map_origin;
+  k_map_origin = torch::from_blob(cv_map_origin.data, {3}, torch::kFloat32)
+                     .clone()
+                     .to(k_device);
+  fsSettings["inner_map_size"] >> k_inner_map_size;
+  k_x_max = 0.5f * k_inner_map_size;
+  k_y_max = k_x_max;
+  k_z_max = k_x_max;
+  k_x_min = -0.5f * k_inner_map_size;
+  k_y_min = k_x_min;
+  k_z_min = k_x_min;
+  k_octree_level =
+      ceil(log2((k_inner_map_size + 2 * k_leaf_size) * k_leaf_size_inv));
+  k_map_resolution = std::pow(2, k_octree_level);
+  k_map_size = k_map_resolution * k_leaf_size;
+  k_map_size_inv = 1.0f / k_map_size;
+
+  if (k_fill_level > k_octree_level) {
+    k_fill_level = k_octree_level;
+  }
 }
