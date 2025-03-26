@@ -200,7 +200,7 @@ DepthSamples NeuralSLAM::sample(DepthSamples _ray_samples, const int &iter,
 
   point_samples = point_samples.cat(_ray_samples);
 
-  llog::RecordValue("sample_pt_num", point_samples.ray_sdf.size(0));
+  llog::RecordValue("sdf_pt_n", point_samples.ray_sdf.size(0));
 
   p_t_utils_sample->toc_sum();
   return point_samples;
@@ -373,7 +373,7 @@ torch::Tensor NeuralSLAM::color_train_batch_iter(const int &iter) {
 }
 
 void NeuralSLAM::train(int _opt_iter) {
-  k_batch_num = k_sdf_batch_ray_num;
+  k_batch_num = k_batch_ray_num;
   k_sample_pts_per_ray = k_color_batch_pt_num / (float)k_batch_num;
   c10::cuda::CUDACachingAllocator::emptyCache();
   torch::GradMode::set_enabled(true);
@@ -459,15 +459,24 @@ void NeuralSLAM::train_callback(const int &_iter,
     if (_iter % k_outlier_removal_interval == 0) {
       static auto p_t_outlier_remove = llog::CreateTimer(" outlier_remove");
       p_t_outlier_remove->tic();
-      auto xyz_pred_sdf = local_map_ptr->get_sdf(
-          data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3})
-              .to(k_device))[0];
+      // batch remove outlier
+      std::vector<torch::Tensor> inlier_idx_vec;
       auto tmp_outlier_dist =
           exp(log(k_truncated_dis) * (1 - k_t) + log(k_outlier_dist) * k_t);
-      auto inlier_idx = ((xyz_pred_sdf.abs() < tmp_outlier_dist).squeeze())
-                            .nonzero()
-                            .squeeze()
-                            .cpu();
+      auto train_pcl =
+          data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3});
+      int point_num = train_pcl.size(0);
+      for (int i = 0; i < point_num; i += k_vis_batch_pt_num) {
+        auto end = min(i + k_vis_batch_pt_num, point_num - 1);
+        auto xyz_pred_sdf = local_map_ptr->get_sdf(
+            train_pcl.index_select(0, {torch::arange(i, end)}).to(k_device))[0];
+        auto inlier_idx = ((xyz_pred_sdf.abs() < tmp_outlier_dist).squeeze())
+                              .nonzero()
+                              .squeeze()
+                              .cpu();
+        inlier_idx_vec.emplace_back(inlier_idx + i);
+      }
+      auto inlier_idx = torch::cat(inlier_idx_vec, 0);
       cout << "\nOutlier Removal(" << tmp_outlier_dist << "): "
            << data_loader_ptr->dataparser_ptr_->train_depth_pack_.size(0);
 
@@ -695,7 +704,7 @@ bool NeuralSLAM::build_occ_map() {
     int color_width = data_loader_ptr->dataparser_ptr_->sensor_.camera.width;
     int color_height = data_loader_ptr->dataparser_ptr_->sensor_.camera.height;
     int rays_per_frame = color_width * color_height;
-    int frames_per_batch = (100 * k_color_batch_pt_num) / rays_per_frame;
+    int frames_per_batch = k_vis_batch_pt_num / rays_per_frame;
 
     // Create progress bar for color processing
     auto color_iter_bar = tq::trange(data_loader_ptr->dataparser_ptr_->size(
@@ -855,7 +864,6 @@ void NeuralSLAM::batch_train() {
 /* Exporter */
 std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
                                                     const float &_scale,
-                                                    int batch_size,
                                                     const bool &training) {
   static auto p_timer_render = llog::CreateTimer("    render_image");
   p_timer_render->tic();
@@ -876,8 +884,8 @@ std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
   int ray_num = ray_samples.origin.size(0);
   std::vector<torch::Tensor> render_colors_vec, render_depths_vec,
       render_accs_vec, render_scale_vec, render_num_vec, sdf_vec, alphas_vec;
-  float render_pts_num = 10 * k_color_batch_pt_num;
-  float sample_pts_per_ray = render_pts_num / (float)batch_size;
+  float batch_size = k_batch_ray_num;
+  float sample_pts_per_ray = k_vis_batch_pt_num / batch_size;
   for (int i = 0; i < ray_num;) {
     int end = min(i + batch_size, ray_num);
     batch_size = end - i;
@@ -902,7 +910,7 @@ std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
     float tmp_sample_pts_per_ray = c_pt_n / (float)batch_size;
     sample_pts_per_ray =
         sample_pts_per_ray * 0.9f + tmp_sample_pts_per_ray * 0.1f;
-    batch_size = render_pts_num / sample_pts_per_ray;
+    batch_size = k_vis_batch_pt_num / sample_pts_per_ray;
   }
   auto render_colors = torch::cat(render_colors_vec, 0);
   auto render_depths = torch::cat(render_depths_vec, 0);
@@ -1005,7 +1013,7 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
     auto render_results =
         render_image(data_loader_ptr->dataparser_ptr_->get_pose(i, image_type)
                          .slice(0, 0, 3),
-                     1.0, k_batch_ray_num, false);
+                     1.0, false);
     p_timer_render->toc_sum();
     if (!render_results.empty() && save) {
       auto render_color = utils::tensor_to_cv_mat(render_results[0]);
@@ -1127,8 +1135,7 @@ void NeuralSLAM::render_path(std::string pose_file, const int &fps) {
   static auto p_timer_render = llog::CreateTimer("    render_train_image");
   for (const auto &i : iter_bar) {
     p_timer_render->tic();
-    auto render_results =
-        render_image(poses[i].slice(0, 0, 3), 1.0, k_batch_ray_num, false);
+    auto render_results = render_image(poses[i].slice(0, 0, 3), 1.0, false);
     p_timer_render->toc_sum();
     if (!render_results.empty()) {
       auto render_color = utils::tensor_to_cv_mat(render_results[0]);
@@ -1185,7 +1192,7 @@ float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
       render_image(data_loader_ptr->dataparser_ptr_->get_pose(idx, image_type)
                        .slice(0, 0, 3)
                        .to(k_device),
-                   1.0, k_batch_ray_num, false);
+                   1.0, false);
   float psnr = 0.0f;
   if (!render_results.empty()) {
     auto render_color = render_results[0].clamp(0.0f, 1.0f);
@@ -1747,7 +1754,7 @@ void NeuralSLAM::pub_render_image(std_msgs::Header _header) {
     }
 
     torch::NoGradGuard no_grad;
-    auto render_results = render_image(rviz_pose_, 1.0, k_batch_ray_num, false);
+    auto render_results = render_image(rviz_pose_, 1.0, false);
     if (!render_results.empty()) {
       if (rgb_pub.getNumSubscribers() > 0) {
         pub_image(rgb_pub, render_results[0], _header);

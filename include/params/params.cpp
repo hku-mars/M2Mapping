@@ -16,9 +16,7 @@ bool k_prob_map_en;
 
 std::filesystem::path k_dataset_path;
 
-std::string k_depth_topic, k_pose_topic;
 int k_ds_pt_num, k_max_pt_num;
-int k_bundle_frame_num;
 
 std::filesystem::path k_output_path, k_package_path;
 
@@ -33,7 +31,7 @@ int k_octree_level, k_fill_level;
 int k_map_resolution;
 
 int k_iter_step, k_export_interval, k_export_ckp_interval;
-int k_surface_sample_num, k_free_sample_num, k_sdf_batch_ray_num, k_batch_type;
+int k_surface_sample_num, k_free_sample_num;
 float k_color_batch_pt_num;
 int k_batch_num;
 float k_sample_pts_per_ray;
@@ -53,7 +51,7 @@ int k_n_levels, k_n_features_per_level, k_log2_hashmap_size;
 bool mapper_init, mapper_update;
 float k_bce_sigma, k_bce_isigma, k_truncated_dis, k_sphere_trace_thr;
 float k_sdf_weight, k_eikonal_weight, k_curvate_weight, k_rgb_weight,
-    k_dssim_weight, k_dist_weight, k_sdf_weight_init, k_rgb_weight_init;
+    k_dist_weight, k_sdf_weight_init, k_rgb_weight_init;
 float k_res_scale;
 
 int k_trace_iter;
@@ -163,6 +161,7 @@ void read_params(const std::filesystem::path &_config_path,
   k_truncated_dis = 3 * k_leaf_size;
 
   fsSettings["trace_iter"] >> k_trace_iter;
+  k_batch_ray_num = k_color_batch_pt_num / k_trace_iter;
   fsSettings["sphere_trace_thr"] >> k_sphere_trace_thr;
 
   if (!fsSettings["camera"].isNone()) {
@@ -316,9 +315,8 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
 
   fsSettings["surface_sample_num"] >> k_surface_sample_num;
   fsSettings["free_sample_num"] >> k_free_sample_num;
-  fsSettings["sdf_batch_ray_num"] >> k_sdf_batch_ray_num;
   fsSettings["color_batch_pt_num"] >> k_color_batch_pt_num;
-  fsSettings["batch_type"] >> k_batch_type;
+  k_vis_batch_pt_num = 100 * k_color_batch_pt_num;
   fsSettings["trunc_sdf"] >> k_trunc_sdf;
 
   fsSettings["hidden_dim"] >> k_hidden_dim;
@@ -342,13 +340,10 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
   k_rgb_weight_init = k_sdf_weight;
   k_rgb_weight = k_rgb_weight > 0 ? 1e-4f : 0.0f;
   k_rgb_weight_init = k_rgb_weight > 0 ? 1e-4f : 0.0f;
-  fsSettings["ssim_weight"] >> k_dssim_weight;
   fsSettings["eikonal_weight"] >> k_eikonal_weight;
   fsSettings["curvate_weight"] >> k_curvate_weight;
   fsSettings["dist_weight"] >> k_dist_weight;
 
-  fsSettings["vis_batch_pt_num"] >> k_vis_batch_pt_num;
-  k_batch_ray_num = k_vis_batch_pt_num / 1000;
   fsSettings["vis_frame_step"] >> k_vis_frame_step;
 
   fsSettings["export_interval"] >> k_export_interval;

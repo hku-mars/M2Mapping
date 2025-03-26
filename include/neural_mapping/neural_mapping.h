@@ -112,7 +112,6 @@ private:
 
   std::vector<torch::Tensor> render_image(const torch::Tensor &_pose,
                                           const float &_scale = 1.0,
-                                          int batch_size = 2e5,
                                           const bool &training = true);
 
   void render_path(bool eval, const int &fps = 30, const bool &save = true);

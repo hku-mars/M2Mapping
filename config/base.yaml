@@ -1,5 +1,4 @@
 %YAML:1.0
-# rosrun neural_mapping neural_mapping_node src/RIM2/rim/config/neural_rgbd/neural_rgbd.yaml src/RIM2/data/neural_rgbd_data/kitchen_kitti_format
 
 debug: 0 # 0: disable; 1: enable
 
@@ -19,7 +18,6 @@ color_num_layer: 3
 
 # rim params
 trunc_sdf: 1
-sdf_batch_ray_num: 8192 # sample ray batch size
 surface_sample_num: 3
 free_sample_num: 3
 color_batch_pt_num: 256000 # color render pt batch size
@@ -33,10 +31,8 @@ curvate_weight: 5e-4 # should be the same loss level to eikonal loss
 dist_weight: 1e-1
 
 rgb_weight: 10.0
-ssim_weight: 0.2
 
 # visualization
-vis_batch_pt_num: 1e7 # 1e6 # lower it if OOM(Out of Memory)
 vis_frame_step: 10
 
 export_interval: 1000 # every export_interval frames, the test will be exported
