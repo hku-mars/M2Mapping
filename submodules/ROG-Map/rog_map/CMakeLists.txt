@@ -6,12 +6,12 @@ set(CMAKE_BUILD_TYPE "Release")
 # set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -fPIC")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -Wall -g  -fPIC")
-set(CMAKE_CUDA_FLAGS_RELEASE
-    "${CMAKE_CUDA_FLAGS} -rdc=true -lcudadevrt -gencode arch=compute_75,code=sm_75 "
-) # -gencode arch=compute_87,code=sm_87
-set(CMAKE_CUDA_FLAGS_DEBUG
-    "${CMAKE_CUDA_FLAGS} -G -rdc=true -lcudadevrt -gencode arch=compute_75,code=sm_75"
-) # -gencode arch=compute_87,code=sm_87
+# set(CMAKE_CUDA_FLAGS_RELEASE
+#     "${CMAKE_CUDA_FLAGS} -rdc=true -lcudadevrt -gencode arch=compute_75,code=sm_75 "
+# ) # -gencode arch=compute_87,code=sm_87
+# set(CMAKE_CUDA_FLAGS_DEBUG
+#     "${CMAKE_CUDA_FLAGS} -G -rdc=true -lcudadevrt -gencode arch=compute_75,code=sm_75"
+# ) # -gencode arch=compute_87,code=sm_87
 
 add_compile_options(-DQT_NO_VERSION_TAGGING)
 add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")

@@ -316,7 +316,7 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
   fsSettings["surface_sample_num"] >> k_surface_sample_num;
   fsSettings["free_sample_num"] >> k_free_sample_num;
   fsSettings["color_batch_pt_num"] >> k_color_batch_pt_num;
-  k_vis_batch_pt_num = 100 * k_color_batch_pt_num;
+  k_vis_batch_pt_num = 10 * k_color_batch_pt_num;
   fsSettings["trunc_sdf"] >> k_trunc_sdf;
 
   fsSettings["hidden_dim"] >> k_hidden_dim;

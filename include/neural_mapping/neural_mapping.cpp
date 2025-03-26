@@ -349,7 +349,7 @@ torch::Tensor NeuralSLAM::color_train_batch_iter(const int &iter) {
     k_sample_pts_per_ray =
         k_sample_pts_per_ray * 0.9 + sample_pts_per_ray * 0.1;
     llog::RecordValue("pts_per_ray", k_sample_pts_per_ray);
-    static int max_batch_num = k_color_batch_pt_num / k_trace_iter;
+    static int max_batch_num = 5 * k_color_batch_pt_num / k_trace_iter;
     k_batch_num =
         min(k_color_batch_pt_num / k_sample_pts_per_ray, max_batch_num);
 
