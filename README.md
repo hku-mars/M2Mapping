@@ -52,12 +52,56 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 #### 3.1. Replica
 
 - Download the Replica dataset from [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764) and unzip it to `src/M2Mapping/data`:
-```bash
-wget https://cvg-data.inf.ethz.ch/nice-slam/data/Replica.zip
-unzip -d src/M2Mapping/data Replica.zip
-unzip -d src/M2Mapping/data/Replica cull_replica_mesh.zip
-unzip -d src/M2Mapping/data replica_extra_eval.zip
-```
+  ```bash
+  wget https://cvg-data.inf.ethz.ch/nice-slam/data/Replica.zip
+  unzip -d src/M2Mapping/data Replica.zip
+  unzip -d src/M2Mapping/data/Replica cull_replica_mesh.zip
+  unzip -d src/M2Mapping/data replica_extra_eval.zip
+  ```
+- Arrange the data as follows:
+  ```bash
+  ├── Replica
+  │   ├── room2
+  │   │   ├── eval
+  │   │   │   └── results
+  │   │   │   │   └── *.jpg
+  │   │   │   │   └── *.png
+  │   │   │   └── traj.txt
+  │   │   └── results
+  │   │   │   └── *.jpg
+  │   │   │   └── *.png
+  │   │   └── traj.txt
+  ```
+
+#### 3.2. FAST-LIVO2 Datasets
+- Download either Rosbag or Parsered Data in [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764).
+
+- Arrange the data as follows:
+  - For Rosbag:
+    ```bash
+    ├── data
+    │   ├── FAST_LIVO2_Datasets
+    │   ├── campus
+    │   │   │   ├── fast_livo2_campus.bag
+    ```
+  - For Parsered Data:
+    ```bash
+    ├── data
+    │   ├── FAST_LIVO2_Datasets
+    │   │   ├── campus
+    │   │   │   ├── images
+
+    ```
+
+
+#### 3.3. Custom FAST-LIVO2 Datasets
+
+- Clone the [modified-FAST-LIVO2](https://github.com/jianhengLiu/FAST-LIVO2) repo; install and run FAST-LIVO2 as the official instruction. The overall pipeline as:
+  ```bash
+  roslaunch fast_livo mapping_avia.launch
+  rosbag play YOUR_DOWNLOADED.bag
+  rosbag record /aft_mapped_to_init /origin_img /cloud_registered_body /tf /tf_static /path -O "fast_livo2_YOUR_DOWNLOADED" -b 2048
+  ```
 
 
 ### 4. Run
