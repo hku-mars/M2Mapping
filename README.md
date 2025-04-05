@@ -54,6 +54,7 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 - Download the Replica dataset from [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764) and unzip it to `src/M2Mapping/data`:
   ```bash
   wget https://cvg-data.inf.ethz.ch/nice-slam/data/Replica.zip
+  # Replica.zip, cull_replica_mesh.zip, and replica_extra_eval.zip are supposed under m2mapping_ws
   unzip -d src/M2Mapping/data Replica.zip
   unzip -d src/M2Mapping/data/Replica cull_replica_mesh.zip
   unzip -d src/M2Mapping/data replica_extra_eval.zip

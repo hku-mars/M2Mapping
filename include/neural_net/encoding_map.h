@@ -12,8 +12,6 @@ struct EncodingMap : SubMap {
 
   std::mutex state_mutex_;
 
-  void register_torch_parameter();
-
   torch::Tensor encoding(const torch::Tensor &xyz, const int &encoding_type = 0,
                          const bool &normalized = false);
 

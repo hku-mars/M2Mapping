@@ -347,7 +347,7 @@ void NeuralSLAM::train_callback(const int &_iter,
     }
   }
   // extremely importance to avoid color degenerate structure in early stage
-  k_rgb_weight = k_rgb_weight_init * (1 - k_t) + k_sdf_weight_init * k_t;
+  k_rgb_weight = k_rgb_weight_init * (1 - k_t) + k_rgb_weight_end * k_t;
 
   if (_point_samples.pred_isigma.numel() > 0) {
     k_sample_std = (1.0 / _point_samples.pred_isigma).mean().item<float>();

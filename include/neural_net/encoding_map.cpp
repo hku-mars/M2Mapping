@@ -31,11 +31,6 @@ EncodingMap::EncodingMap(const torch::Tensor &_pos_W_M, std::string _name,
   active_ = true;
 }
 
-void EncodingMap::register_torch_parameter() {
-  p_encoder_tcnn_->params_ = register_parameter(p_encoder_tcnn_->name_,
-                                                p_encoder_tcnn_->params_, true);
-}
-
 torch::Tensor EncodingMap::encoding(const torch::Tensor &xyz,
                                     const int &encoding_type,
                                     const bool &normalized) {

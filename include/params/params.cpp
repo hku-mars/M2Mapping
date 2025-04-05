@@ -52,7 +52,7 @@ int k_n_levels, k_n_features_per_level, k_log2_hashmap_size;
 bool mapper_init, mapper_update;
 float k_bce_sigma, k_bce_isigma, k_truncated_dis, k_sphere_trace_thr;
 float k_sdf_weight, k_eikonal_weight, k_curvate_weight, k_rgb_weight,
-    k_dist_weight, k_sdf_weight_init, k_rgb_weight_init;
+    k_dist_weight, k_rgb_weight_end, k_rgb_weight_init;
 float k_res_scale;
 
 int k_trace_iter;
@@ -338,7 +338,7 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
 
   fsSettings["sdf_weight"] >> k_sdf_weight;
   fsSettings["rgb_weight"] >> k_rgb_weight;
-  k_sdf_weight_init = k_rgb_weight;
+  k_rgb_weight_end = k_rgb_weight;
   k_rgb_weight_init = k_sdf_weight;
   k_rgb_weight = k_rgb_weight > 0 ? 1e-4f : 0.0f;
   k_rgb_weight_init = k_rgb_weight > 0 ? 1e-4f : 0.0f;
