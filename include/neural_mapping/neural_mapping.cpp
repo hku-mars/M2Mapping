@@ -995,148 +995,210 @@ void NeuralSLAM::create_dir(const std::filesystem::path &base_path,
 }
 
 void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
+  // Early exit if evaluation requested with no evaluation data
   if (eval && (data_loader_ptr->dataparser_ptr_->size(
                    dataparser::DataType::EvalColor) == 0)) {
     return;
   }
+
   torch::GradMode::set_enabled(false);
   c10::cuda::CUDACachingAllocator::emptyCache();
 
-  std::filesystem::path train_color_path, train_depth_path, train_gt_color_path,
-      train_render_color_path, train_gt_depth_path, train_render_depth_path,
-      train_acc_path;
-  std::filesystem::path test_color_path, test_depth_path, test_gt_color_path,
-      test_render_color_path, test_gt_depth_path, test_render_depth_path,
-      test_acc_path;
-  std::filesystem::path eval_color_path, eval_depth_path, eval_gt_color_path,
-      eval_render_color_path, eval_gt_depth_path, eval_render_depth_path,
-      eval_acc_path;
-
+  // Determine image type and create necessary directories once
   int image_type;
   std::string image_type_name;
+  std::filesystem::path output_dir, gt_color_path, render_color_path,
+      gt_depth_path, render_depth_path, acc_path;
+
   if (!eval) {
     image_type = dataparser::DataType::RawColor;
     image_type_name = "train";
-    create_dir(k_output_path / "train", train_color_path, train_depth_path,
-               train_gt_color_path, train_render_color_path,
-               train_gt_depth_path, train_render_depth_path, train_acc_path);
-    create_dir(k_output_path / "test", test_color_path, test_depth_path,
-               test_gt_color_path, test_render_color_path, test_gt_depth_path,
-               test_render_depth_path, test_acc_path);
+    output_dir = k_output_path / "train";
   } else {
     image_type = dataparser::DataType::EvalColor;
     image_type_name = "eval";
-    create_dir(k_output_path / "eval", eval_color_path, eval_depth_path,
-               eval_gt_color_path, eval_render_color_path, eval_gt_depth_path,
-               eval_render_depth_path, eval_acc_path);
+    output_dir = k_output_path / "eval";
   }
 
+  // Only create directories if saving is enabled
+  if (save) {
+    std::filesystem::path color_path = output_dir / "color";
+    std::filesystem::path depth_path = output_dir / "depth";
+    gt_color_path = color_path / "gt";
+    render_color_path = color_path / "renders";
+    gt_depth_path = depth_path / "gt";
+    render_depth_path = depth_path / "renders";
+    acc_path = output_dir / "acc";
+
+    // Create all directories at once instead of in create_dir function
+    std::vector<std::filesystem::path> paths = {
+        gt_color_path, render_color_path, gt_depth_path, render_depth_path,
+        acc_path};
+    for (const auto &path : paths) {
+      std::filesystem::create_directories(path);
+    }
+
+    // If not eval, create test directories too
+    if (!eval) {
+      std::filesystem::path test_dir = k_output_path / "test";
+      for (const auto &subdir :
+           {"color/gt", "color/renders", "depth/gt", "depth/renders", "acc"}) {
+        std::filesystem::create_directories(test_dir / subdir);
+      }
+    }
+  }
+
+  // Get image dimensions
   auto width = data_loader_ptr->dataparser_ptr_->sensor_.camera.width;
   auto height = data_loader_ptr->dataparser_ptr_->sensor_.camera.height;
 
-  auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-  cv::VideoWriter video_color(k_output_path /
-                                  (image_type_name + "/render_color.mp4"),
-                              video_format, fps, cv::Size(2 * width, height));
-  cv::VideoWriter video_depth;
+  // Setup video writers only when needed
+  cv::VideoWriter video_color, video_depth;
+  if (save) {
+    auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
+    video_color.open(k_output_path / (image_type_name + "/render_color.mp4"),
+                     video_format, fps, cv::Size(2 * width, height));
+  }
 
-  auto depth_scale = 1.0 / data_loader_ptr->dataparser_ptr_->depth_scale_inv_;
+  // Pre-allocate reusable buffers for image processing
+  cv::Mat cat_color, cat_depth, depth_colormap, acc_colormap;
+
+  // Prepare a queue for background image writing
+  struct ImageSaveTask {
+    std::filesystem::path path;
+    cv::Mat image;
+  };
+  std::vector<ImageSaveTask> save_queue;
+  save_queue.reserve(20); // Pre-allocate to avoid reallocations
+
+  // Periodically flush save queue to avoid excessive memory usage
+  auto flush_save_queue = [&save_queue]() {
+    for (const auto &task : save_queue) {
+      cv::imwrite(task.path, task.image);
+    }
+    save_queue.clear();
+  };
+
   auto iter_bar =
       tq::trange(data_loader_ptr->dataparser_ptr_->size(image_type));
   iter_bar.set_prefix("Rendering");
   static auto p_timer_render = llog::CreateTimer("    render_train_image");
+
+  // LLF skip flag - compute once rather than checking in loop
+  bool llff_skip_enabled = (k_prefilter > 0) && k_llff;
+
   for (const auto &i : iter_bar) {
-    if ((k_prefilter > 0) && k_llff && (i % 8 != 0)) {
+    // Skip frames if necessary (computed once for efficiency)
+    if (llff_skip_enabled && (i % 8 != 0)) {
       continue;
     }
+
+    // Render the image
     p_timer_render->tic();
-    auto render_results =
-        render_image(data_loader_ptr->dataparser_ptr_->get_pose(i, image_type)
-                         .slice(0, 0, 3),
-                     1.0, false);
+    auto pose = data_loader_ptr->dataparser_ptr_->get_pose(i, image_type)
+                    .slice(0, 0, 3);
+    auto render_results = render_image(pose, 1.0, false);
     p_timer_render->toc_sum();
-    if (!render_results.empty() && save) {
-      auto render_color = utils::tensor_to_cv_mat(render_results[0]);
-      auto gt_color =
-          data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type);
-      cv::Mat cat_color;
+
+    // Skip processing if render failed or saving disabled
+    if (render_results.empty() || !save) {
+      continue;
+    }
+
+    // Convert tensors to OpenCV format once
+    auto render_color = utils::tensor_to_cv_mat(render_results[0]);
+    auto render_depth = utils::tensor_to_cv_mat(render_results[1]);
+    auto render_acc = utils::tensor_to_cv_mat(render_results[2]);
+
+    // Get GT images
+    auto gt_color =
+        data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type);
+    auto gt_depth =
+        data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type + 1);
+
+    // Prepare depth colormap (reused for video and saves)
+    depth_colormap = utils::apply_colormap_to_depth(render_depth);
+    acc_colormap = utils::apply_colormap_to_depth(render_acc, 0.0, 1.0);
+
+    // Add to video (if open)
+    if (video_color.isOpened()) {
       cv::hconcat(gt_color, render_color, cat_color);
       video_color.write(cat_color);
+    }
 
-      auto render_depth = utils::tensor_to_cv_mat(render_results[1]);
-      cv::Mat depth_colormap = utils::apply_colormap_to_depth(render_depth);
-      auto render_acc = utils::tensor_to_cv_mat(render_results[2]);
-      cv::Mat acc_colormap =
-          utils::apply_colormap_to_depth(render_acc, 0.0, 1.0);
-
-      cv::Mat cat_depth;
-      auto gt_depth =
-          data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type + 1);
-      std::filesystem::path gt_depth_file, gt_depth_file_name;
-      if (!gt_depth.empty()) {
-        gt_depth_file =
-            data_loader_ptr->dataparser_ptr_->get_file(i, image_type + 1);
-        gt_depth_file_name = gt_depth_file.filename();
-        if (!video_depth.isOpened()) {
-          video_depth = cv::VideoWriter(
-              k_output_path / (image_type_name + "/render_depth.mp4"),
-              video_format, fps, cv::Size(2 * width, height));
-        }
-        gt_depth = utils::apply_colormap_to_depth(gt_depth);
-        cv::hconcat(gt_depth, depth_colormap, cat_depth);
-      } else {
-        if (!video_depth.isOpened()) {
-          video_depth = cv::VideoWriter(
-              k_output_path / (image_type_name + "/render_depth.mp4"),
-              video_format, fps, cv::Size(width, height));
-        }
-        cat_depth = depth_colormap;
+    // Handle depth video (lazy initialization)
+    if (!gt_depth.empty()) {
+      if (!video_depth.isOpened()) {
+        auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
+        video_depth.open(k_output_path /
+                             (image_type_name + "/render_depth.mp4"),
+                         video_format, fps, cv::Size(2 * width, height));
       }
+
+      auto gt_depth_colormap = utils::apply_colormap_to_depth(gt_depth);
+      cv::hconcat(gt_depth_colormap, depth_colormap, cat_depth);
       video_depth.write(cat_depth);
+    } else if (!video_depth.isOpened() && save) {
+      auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
+      video_depth.open(k_output_path / (image_type_name + "/render_depth.mp4"),
+                       video_format, fps, cv::Size(width, height));
+      video_depth.write(depth_colormap);
+    } else if (video_depth.isOpened()) {
+      video_depth.write(depth_colormap);
+    }
 
-      auto gt_color_file_name =
-          data_loader_ptr->dataparser_ptr_->get_file(i, image_type)
-              .filename()
-              .replace_extension(".png");
-      if (eval) {
-        cv::imwrite(eval_gt_color_path / gt_color_file_name, gt_color);
-        cv::imwrite(eval_render_color_path / gt_color_file_name, render_color);
-      } else {
-        if (k_llff && (i % 8 == 0)) {
-          cv::imwrite(test_gt_color_path / gt_color_file_name, gt_color);
-          cv::imwrite(test_render_color_path / gt_color_file_name,
-                      render_color);
-        } else {
-          cv::imwrite(train_gt_color_path / gt_color_file_name, gt_color);
-          cv::imwrite(train_render_color_path / gt_color_file_name,
-                      render_color);
-        }
-      }
+    // Get output paths for saving
+    auto gt_color_file_name =
+        data_loader_ptr->dataparser_ptr_->get_file(i, image_type)
+            .filename()
+            .replace_extension(".png");
 
-      if (eval) {
-        if (!gt_depth.empty()) {
-          cv::imwrite(eval_gt_depth_path / gt_depth_file_name, gt_depth);
-        }
-        cv::imwrite(eval_render_depth_path / gt_color_file_name,
-                    depth_colormap);
-      } else {
-        if (k_llff && (i % 8 == 0)) {
-          if (!gt_depth.empty()) {
-            cv::imwrite(test_gt_depth_path / gt_depth_file_name, gt_depth);
-          }
-          cv::imwrite(test_render_depth_path / gt_color_file_name,
-                      depth_colormap);
-        } else {
-          if (!gt_depth.empty()) {
-            cv::imwrite(train_gt_depth_path / gt_depth_file_name, gt_depth);
-          }
-          cv::imwrite(train_render_depth_path / gt_color_file_name,
-                      depth_colormap);
-          cv::imwrite(train_acc_path / gt_color_file_name, acc_colormap);
-        }
-      }
+    std::filesystem::path gt_depth_file_name;
+    if (!gt_depth.empty()) {
+      gt_depth_file_name =
+          data_loader_ptr->dataparser_ptr_->get_file(i, image_type + 1)
+              .filename();
+    }
+
+    // Queue images for saving - use test path for certain frames if needed
+    bool is_test = (!eval) && k_llff && (i % 8 == 0);
+    std::filesystem::path base_dir =
+        is_test ? (k_output_path / "test") : output_dir;
+
+    // Queue image saving tasks
+    save_queue.push_back(
+        {base_dir / "color/gt" / gt_color_file_name, gt_color.clone()});
+    save_queue.push_back({base_dir / "color/renders" / gt_color_file_name,
+                          render_color.clone()});
+
+    if (!gt_depth.empty()) {
+      auto gt_depth_colormap = utils::apply_colormap_to_depth(gt_depth);
+      save_queue.push_back({base_dir / "depth/gt" / gt_depth_file_name,
+                            gt_depth_colormap.clone()});
+    }
+
+    save_queue.push_back({base_dir / "depth/renders" / gt_color_file_name,
+                          depth_colormap.clone()});
+
+    if (!is_test && !eval) {
+      save_queue.push_back(
+          {base_dir / "acc" / gt_color_file_name, acc_colormap.clone()});
+    }
+
+    // Flush save queue periodically to avoid excessive memory usage
+    if (save_queue.size() >= 20) {
+      flush_save_queue();
     }
   }
+
+  // Final flush of save queue
+  flush_save_queue();
+
+  // Explicitly release video writers
+  if (video_color.isOpened())
+    video_color.release();
+  if (video_depth.isOpened())
+    video_depth.release();
 }
 
 void NeuralSLAM::render_path(std::string pose_file, const int &fps) {

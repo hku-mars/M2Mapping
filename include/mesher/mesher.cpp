@@ -76,52 +76,59 @@ Mesher::cull_mesh(dataparser::DataParser::Ptr dataparser_ptr_,
   auto whole_mask =
       torch::ones(vertices.size(0), vertices.options()).to(torch::kBool);
   auto device = vertices.device();
+
+  // Pre-compute constants and allocate reusable tensors
+  static const auto K = torch::tensor({{dataparser_ptr_->sensor_.camera.fx, 0.f,
+                                        dataparser_ptr_->sensor_.camera.cx},
+                                       {0.f, dataparser_ptr_->sensor_.camera.fy,
+                                        dataparser_ptr_->sensor_.camera.cy},
+                                       {0.f, 0.f, 1.f}},
+                                      device);
+  static const auto W = dataparser_ptr_->sensor_.camera.width;
+  static const auto H = dataparser_ptr_->sensor_.camera.height;
+
+  // Pre-compute homogeneous vertices (only done once)
+  const auto ones =
+      torch::ones({vertices.size(0), 1}, torch::kFloat32).to(device);
+  const auto homo_points = torch::cat({vertices, ones}, 1).reshape({-1, 4, 1});
+
+  // Buffers for reuse in the loop
+  auto cam_cord_homo =
+      torch::empty({vertices.size(0), 4, 1}, vertices.options());
+  auto cam_cord = torch::empty({vertices.size(0), 3, 1}, vertices.options());
+  auto uv = torch::empty({vertices.size(0), 2}, vertices.options());
+  auto grid = torch::empty({vertices.size(0), 2}, vertices.options());
+  auto mask =
+      torch::empty(vertices.size(0), vertices.options().dtype(torch::kBool));
+
   auto iter_bar = tq::trange(n_imgs);
   iter_bar.set_prefix("Culling mesh");
+
   for (const auto &i : iter_bar) {
     auto pose =
         dataparser_ptr_->get_pose(i, dataparser::DataType::RawDepth).to(device);
     auto depth = dataparser_ptr_->get_depth_image(i).to(device);
-
     auto w2c = torch::inverse(pose);
 
-    static auto K = torch::tensor({{dataparser_ptr_->sensor_.camera.fx, 0.f,
-                                    dataparser_ptr_->sensor_.camera.cx},
-                                   {0.f, dataparser_ptr_->sensor_.camera.fy,
-                                    dataparser_ptr_->sensor_.camera.cy},
-                                   {0.f, 0.f, 1.f}},
-                                  device);
-    auto ones = torch::ones({vertices.size(0), 1}, torch::kFloat32).to(device);
-    auto homo_points = torch::cat({vertices, ones}, 1).reshape({-1, 4, 1});
-    auto cam_cord_homo = w2c.matmul(homo_points);
-    // [N, 3, 1]
-    auto cam_cord = cam_cord_homo.slice(1, 0, 3);
-    // [N, 1, 1]
+    // Transform points to camera space
+    cam_cord_homo = w2c.matmul(homo_points);
+    cam_cord = cam_cord_homo.slice(1, 0, 3);
     auto z = cam_cord.slice(1, -1);
+    auto z_squeezed = z.squeeze();
 
-    auto uv = cam_cord / z.abs();
-    // auto first_col = cam_cord.index_select(1, torch::tensor({0}));
-    // // Multiply the first column by -1
-    // first_col *= -1;
-    // cam_cord.index_copy_(1, torch::tensor({0}), first_col);
-
-    // [N, 3, 1]
+    // Project to image space
+    uv = cam_cord / z.abs();
     uv = K.matmul(uv);
-    // [N,2]
     uv = uv.slice(1, 0, 2).squeeze(-1);
 
-    // https://pytorch.org/docs/main/generated/torch.nn.functional.grid_sample.html#torch.nn.functional.grid_sample
-    static auto W = dataparser_ptr_->sensor_.camera.width;
-    static auto H = dataparser_ptr_->sensor_.camera.height;
+    // Create grid for sampling
     auto grid_x = uv.slice(1, 0, 1) / W;
     auto grid_y = uv.slice(1, 1) / H;
+    grid = torch::cat({grid_x, grid_y}, 1);
+    grid = 2 * grid - 1; // Convert to [-1,1] range
 
-    auto grid = torch::cat({grid_x, grid_y}, 1);
-    // need range in [-1,1]
-    grid = 2 * grid - 1;
-    // [1,1,H,W]
+    // Sample depth from image
     auto input = depth.unsqueeze(0).unsqueeze(1).squeeze(-1);
-    // [1,1,N,2(W+H)]
     auto flow_field = grid.unsqueeze(0).unsqueeze(1);
     auto depth_samples = torch::nn::functional::grid_sample(
                              input, flow_field,
@@ -130,21 +137,20 @@ Mesher::cull_mesh(dataparser::DataParser::Ptr dataparser_ptr_,
                                  .align_corners(true))
                              .squeeze();
 
-    auto mask = (0 <= z.squeeze()) & (uv.select(1, 0) < W) &
-                (uv.select(1, 0) > 0) & (uv.select(1, 1) < H) &
-                (uv.select(1, 1) > 0);
-    auto depth_mask = (depth_samples + 0.02f) > z.squeeze();
-    mask = mask & depth_mask;
+    // Create visibility mask
+    mask = (0 <= z_squeezed) & (uv.select(1, 0) < W) & (uv.select(1, 0) > 0) &
+           (uv.select(1, 1) < H) & (uv.select(1, 1) > 0) &
+           ((depth_samples + 0.02f) > z_squeezed);
+
+    // Update the global mask
     whole_mask &= ~mask;
   }
 
+  // Cull faces based on vertices
   auto face_mask = ~(whole_mask.index({faces}).all(1));
   auto valid_face_idx = face_mask.nonzero().squeeze();
-  // auto valid_vertices_idx = faces.index({valid_face_idx}).view(-1);
-  // valid_vertices_idx = std::get<0>(torch::unique_dim(valid_vertices_idx, 0));
-  // vertices = vertices.index({valid_vertices_idx});
   faces = faces.index({valid_face_idx});
-  // vertice_attrs = vertice_attrs.index({valid_vertices_idx});
+
   return {vertices, faces, vertice_attrs};
 }
 } // namespace mesher
