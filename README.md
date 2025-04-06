@@ -152,7 +152,7 @@ Input `h` + `Enter` to see the help message.
 - Run the following command to visualize the map in real-time:
   ```bash
   source devel/setup.bash # or setup.zsh
-  roslaunch m2mapping rviz.launch
+  roslaunch neural_mapping rviz.launch
   ```
   Drag the view to activate and control the view with the mouse.
 - For post-training visualization, you can use the following command:
@@ -161,7 +161,7 @@ Input `h` + `Enter` to see the help message.
   # If ROS is installed, you can also run the following command:
   # rosrun neural_mapping neural_mapping_node view src/M2Mapping/output/(your_output_folder)
 
-  roslaunch m2mapping rviz.launch
+  roslaunch neural_mapping rviz.launch
   ```
 
 ### 6. Docker
