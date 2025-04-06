@@ -339,7 +339,6 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
   fsSettings["sdf_weight"] >> k_sdf_weight;
   fsSettings["rgb_weight"] >> k_rgb_weight;
   k_rgb_weight_end = k_rgb_weight;
-  k_rgb_weight_init = k_sdf_weight;
   k_rgb_weight = k_rgb_weight > 0 ? 1e-4f : 0.0f;
   k_rgb_weight_init = k_rgb_weight > 0 ? 1e-4f : 0.0f;
   fsSettings["eikonal_weight"] >> k_eikonal_weight;

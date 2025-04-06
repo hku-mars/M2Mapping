@@ -197,11 +197,8 @@ render_ray(const LocalMap::Ptr &_local_map_ptr, const torch::Tensor &ray_o,
   delta = sample_results[2];
   auto slope = sample_results[3];
 
-  static auto timer_index_select = llog::CreateTimer("        index_select");
-  timer_index_select->tic();
   auto sample_ray_d = ray_d.index_select(0, sample_ridx).view({-1, 3});
   auto sample_ray_o = ray_o.index_select(0, sample_ridx).view({-1, 3});
-  timer_index_select->toc_sum();
   auto sample_pts = torch::addcmul(sample_ray_o, sample_ray_d, depth);
 
   auto render_results =
