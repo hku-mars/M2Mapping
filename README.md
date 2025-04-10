@@ -62,6 +62,8 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 - Arrange the data as follows:
   ```bash
   ├── Replica
+  │   ├── cull_replica_mesh
+  │   │   ├── *.ply
   │   ├── room2
   │   │   ├── eval
   │   │   │   └── results
