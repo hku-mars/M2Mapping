@@ -366,7 +366,7 @@ void write_pt_params() {
          "   data: "
       << cv_map_origin << '\n';
   ofs << "inner_map_size: " << k_inner_map_size << '\n';
-  ofs << "package_path: " << k_package_path << '\n';
+  ofs << "package_path: " << k_package_path.string() << '\n';
 }
 
 void read_pt_params() {
@@ -397,5 +397,5 @@ void read_pt_params() {
   if (k_fill_level > k_octree_level) {
     k_fill_level = k_octree_level;
   }
-  fsSettings["package_path"] >> k_package_path;
+  k_package_path = fsSettings["package_path"];
 }

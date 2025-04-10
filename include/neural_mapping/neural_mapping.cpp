@@ -1048,33 +1048,48 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
     }
   }
 
-  // Get image dimensions
-  auto width = data_loader_ptr->dataparser_ptr_->sensor_.camera.width;
-  auto height = data_loader_ptr->dataparser_ptr_->sensor_.camera.height;
-
-  // Setup video writers only when needed
-  cv::VideoWriter video_color, video_depth;
-  if (save) {
-    auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-    video_color.open(k_output_path / (image_type_name + "/render_color.mp4"),
-                     video_format, fps, cv::Size(2 * width, height));
-  }
-
-  // Pre-allocate reusable buffers for image processing
-  cv::Mat cat_color, cat_depth, depth_colormap, acc_colormap;
-
   // Prepare a queue for background image writing
   struct ImageSaveTask {
-    std::filesystem::path path;
-    cv::Mat image;
+    unsigned long index;
+    int image_type;
+    std::filesystem::path base_dir;
+    torch::Tensor render;
   };
   std::vector<ImageSaveTask> save_queue;
-  save_queue.reserve(20); // Pre-allocate to avoid reallocations
+  int reserve_size = 16;
+  save_queue.reserve(reserve_size); // Pre-allocate to avoid reallocations
 
   // Periodically flush save queue to avoid excessive memory usage
-  auto flush_save_queue = [&save_queue]() {
+  auto flush_save_queue = [&save_queue, this]() {
+#pragma omp parallel for
     for (const auto &task : save_queue) {
-      cv::imwrite(task.path, task.image);
+      int offset = 0;
+      std::string task_type;
+      if (task.image_type % 2 == 0) {
+        task_type = "color";
+      } else {
+        offset = -1;
+        task_type = "depth";
+      }
+      auto output_path = task.base_dir / task_type;
+      auto gt_file = data_loader_ptr->dataparser_ptr_->get_file(
+          task.index, task.image_type + offset);
+      auto gt_file_name = gt_file.filename().replace_extension(".png");
+      auto render_file = task.base_dir / task_type / "renders" / gt_file_name;
+      auto cv_render = utils::tensor_to_cv_mat(task.render);
+      auto gt = data_loader_ptr->dataparser_ptr_->get_image_cv_mat(
+          task.index, task.image_type);
+      gt_file = task.base_dir / task_type / "gt" / gt_file_name;
+      if (offset == 0) {
+        cv::imwrite(render_file, cv_render);
+        cv::imwrite(gt_file, gt);
+      } else {
+        cv::imwrite(render_file, utils::apply_colormap_to_depth(cv_render));
+        if (!gt.empty()) {
+          auto gt_depth_colormap = utils::apply_colormap_to_depth(gt);
+          cv::imwrite(gt_file, gt_depth_colormap);
+        }
+      }
     }
     save_queue.clear();
   };
@@ -1105,61 +1120,6 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
       continue;
     }
 
-    // Convert tensors to OpenCV format once
-    auto render_color = utils::tensor_to_cv_mat(render_results[0]);
-    auto render_depth = utils::tensor_to_cv_mat(render_results[1]);
-    auto render_acc = utils::tensor_to_cv_mat(render_results[2]);
-
-    // Get GT images
-    auto gt_color =
-        data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type);
-    auto gt_depth =
-        data_loader_ptr->dataparser_ptr_->get_image_cv_mat(i, image_type + 1);
-
-    // Prepare depth colormap (reused for video and saves)
-    depth_colormap = utils::apply_colormap_to_depth(render_depth);
-    acc_colormap = utils::apply_colormap_to_depth(render_acc, 0.0, 1.0);
-
-    // Add to video (if open)
-    if (video_color.isOpened()) {
-      cv::hconcat(gt_color, render_color, cat_color);
-      video_color.write(cat_color);
-    }
-
-    // Handle depth video (lazy initialization)
-    if (!gt_depth.empty()) {
-      if (!video_depth.isOpened()) {
-        auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-        video_depth.open(k_output_path /
-                             (image_type_name + "/render_depth.mp4"),
-                         video_format, fps, cv::Size(2 * width, height));
-      }
-
-      auto gt_depth_colormap = utils::apply_colormap_to_depth(gt_depth);
-      cv::hconcat(gt_depth_colormap, depth_colormap, cat_depth);
-      video_depth.write(cat_depth);
-    } else if (!video_depth.isOpened() && save) {
-      auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-      video_depth.open(k_output_path / (image_type_name + "/render_depth.mp4"),
-                       video_format, fps, cv::Size(width, height));
-      video_depth.write(depth_colormap);
-    } else if (video_depth.isOpened()) {
-      video_depth.write(depth_colormap);
-    }
-
-    // Get output paths for saving
-    auto gt_color_file_name =
-        data_loader_ptr->dataparser_ptr_->get_file(i, image_type)
-            .filename()
-            .replace_extension(".png");
-
-    std::filesystem::path gt_depth_file_name;
-    if (!gt_depth.empty()) {
-      gt_depth_file_name =
-          data_loader_ptr->dataparser_ptr_->get_file(i, image_type + 1)
-              .filename();
-    }
-
     // Queue images for saving - use test path for certain frames if needed
     bool is_test = (!eval) && k_llff && (i % 8 == 0);
     std::filesystem::path base_dir =
@@ -1167,38 +1127,17 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
 
     // Queue image saving tasks
     save_queue.push_back(
-        {base_dir / "color/gt" / gt_color_file_name, gt_color.clone()});
-    save_queue.push_back({base_dir / "color/renders" / gt_color_file_name,
-                          render_color.clone()});
-
-    if (!gt_depth.empty()) {
-      auto gt_depth_colormap = utils::apply_colormap_to_depth(gt_depth);
-      save_queue.push_back({base_dir / "depth/gt" / gt_depth_file_name,
-                            gt_depth_colormap.clone()});
-    }
-
-    save_queue.push_back({base_dir / "depth/renders" / gt_color_file_name,
-                          depth_colormap.clone()});
-
-    if (!is_test && !eval) {
-      save_queue.push_back(
-          {base_dir / "acc" / gt_color_file_name, acc_colormap.clone()});
-    }
+        {i, image_type, base_dir, render_results[0].clamp(0.0f, 1.0f)});
+    save_queue.push_back({i, image_type + 1, base_dir, render_results[1]});
 
     // Flush save queue periodically to avoid excessive memory usage
-    if (save_queue.size() >= 20) {
+    if (save_queue.size() >= reserve_size) {
       flush_save_queue();
     }
   }
 
   // Final flush of save queue
   flush_save_queue();
-
-  // Explicitly release video writers
-  if (video_color.isOpened())
-    video_color.release();
-  if (video_depth.isOpened())
-    video_depth.release();
 }
 
 void NeuralSLAM::render_path(std::string pose_file, const int &fps) {
