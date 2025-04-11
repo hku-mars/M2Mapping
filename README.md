@@ -93,7 +93,9 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
     │   ├── FAST_LIVO2_Datasets
     │   │   ├── campus
     │   │   │   ├── images
-
+    │   │   │   ├── depths
+    │   │   │   ├── color_poses.txt
+    │   │   │   ├── depth_poses.txt
     ```
 
 
