@@ -861,6 +861,13 @@ bool NeuralSLAM::build_occ_map() {
           {-1, 3});
   data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz =
       data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3});
+
+  if (k_export_train_pcl) {
+    std::string train_points_ply_file = k_output_path / "train_points.ply";
+    ply_utils::export_to_ply(
+        train_points_ply_file,
+        data_loader_ptr->dataparser_ptr_->train_depth_pack_.xyz.cpu());
+  }
   return true;
 }
 
