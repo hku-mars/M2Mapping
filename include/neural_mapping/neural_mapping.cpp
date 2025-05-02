@@ -910,6 +910,7 @@ void NeuralSLAM::batch_train() {
 
 /* Exporter */
 std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
+                                                    sensor::Cameras &camera,
                                                     const float &_scale,
                                                     const bool &training) {
   static auto p_timer_render = llog::CreateTimer("    render_image");
@@ -917,9 +918,7 @@ std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
   static auto timer_generate_rays = llog::CreateTimer("     generate_rays");
   timer_generate_rays->tic();
 
-  auto camera_ray_results =
-      data_loader_ptr->dataparser_ptr_->sensor_.camera.generate_rays(_pose,
-                                                                     _scale);
+  auto camera_ray_results = camera.generate_rays(_pose, _scale);
   RaySamples ray_samples;
   ray_samples.origin = camera_ray_results[0];
   ray_samples.direction = camera_ray_results[1];
@@ -1015,7 +1014,7 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
   int image_type;
   std::string image_type_name;
   std::filesystem::path output_dir, gt_color_path, render_color_path,
-      gt_depth_path, render_depth_path, acc_path;
+      gt_depth_path, render_depth_path;
 
   if (!eval) {
     image_type = dataparser::DataType::RawColor;
@@ -1035,12 +1034,10 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
     render_color_path = color_path / "renders";
     gt_depth_path = depth_path / "gt";
     render_depth_path = depth_path / "renders";
-    acc_path = output_dir / "acc";
 
     // Create all directories at once instead of in create_dir function
     std::vector<std::filesystem::path> paths = {
-        gt_color_path, render_color_path, gt_depth_path, render_depth_path,
-        acc_path};
+        gt_color_path, render_color_path, gt_depth_path, render_depth_path};
     for (const auto &path : paths) {
       std::filesystem::create_directories(path);
     }
@@ -1119,7 +1116,8 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
     p_timer_render->tic();
     auto pose = data_loader_ptr->dataparser_ptr_->get_pose(i, image_type)
                     .slice(0, 0, 3);
-    auto render_results = render_image(pose, 1.0, false);
+    auto render_results = render_image(
+        pose, data_loader_ptr->dataparser_ptr_->sensor_.camera, 1.0f, false);
     p_timer_render->toc_sum();
 
     // Skip processing if render failed or saving disabled
@@ -1147,65 +1145,112 @@ void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
   flush_save_queue();
 }
 
-void NeuralSLAM::render_path(std::string pose_file, const int &fps) {
+void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
+                             const int &fps) {
+  std::cout << "pose_file: " << pose_file << '\n';
+  std::cout << "camera_file: " << camera_file << '\n';
   torch::NoGradGuard no_grad;
-  std::cout << pose_file << std::endl;
   auto poses =
       data_loader_ptr->dataparser_ptr_->load_poses(pose_file, false, 0)[0];
   if (poses.size(0) == 0) {
     std::cout << "poses is empty" << std::endl;
     return;
   }
+
+  cv::FileStorage fsSettings(camera_file, cv::FileStorage::READ);
+  if (!fsSettings.isOpened()) {
+    std::cerr << "ERROR: Wrong path to settings: " << camera_file << "\n";
+    exit(-1);
+  }
+  sensor::Cameras camera;
+  if (!fsSettings["camera"].isNone()) {
+    camera.model = fsSettings["camera"]["model"];
+    camera.width = fsSettings["camera"]["width"];
+    camera.height = fsSettings["camera"]["height"];
+    camera.fx = fsSettings["camera"]["fx"];
+    camera.fy = fsSettings["camera"]["fy"];
+    camera.cx = fsSettings["camera"]["cx"];
+    camera.cy = fsSettings["camera"]["cy"];
+
+    camera.set_distortion(
+        fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
+        fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
+        fsSettings["camera"]["d4"]);
+  }
   c10::cuda::CUDACachingAllocator::emptyCache();
 
-  std::filesystem::path color_path, depth_path, gt_color_path,
-      render_color_path, gt_depth_path, render_depth_path, acc_path;
+  int image_type = 0;
+  auto output_dir = k_output_path / "path";
+  auto render_color_path = output_dir / "color" / "renders";
+  auto render_depth_path = output_dir / "depth" / "renders";
 
-  int image_type;
-  std::string image_type_name;
-  image_type = 0;
-  image_type_name = "path";
-  create_dir(k_output_path / "path", color_path, depth_path, gt_color_path,
-             render_color_path, gt_depth_path, render_depth_path, acc_path);
+  // Create all directories at once instead of in create_dir function
+  std::vector<std::filesystem::path> paths = {render_color_path,
+                                              render_depth_path};
+  for (const auto &path : paths) {
+    std::filesystem::create_directories(path);
+  }
 
-  auto width = data_loader_ptr->dataparser_ptr_->sensor_.camera.width;
-  auto height = data_loader_ptr->dataparser_ptr_->sensor_.camera.height;
+  // Prepare a queue for background image writing
+  struct ImageSaveTask {
+    int index;
+    int image_type;
+    std::filesystem::path base_dir;
+    torch::Tensor render;
+  };
+  std::vector<ImageSaveTask> save_queue;
+  int reserve_size = 16;
+  save_queue.reserve(reserve_size); // Pre-allocate to avoid reallocations
 
-  auto video_format = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-  cv::VideoWriter video_color(k_output_path /
-                                  (image_type_name + "/render_color.mp4"),
-                              video_format, fps, cv::Size(width, height));
-  cv::VideoWriter video_depth;
+  // Periodically flush save queue to avoid excessive memory usage
+  auto flush_save_queue = [&save_queue, this]() {
+#pragma omp parallel for
+    for (const auto &task : save_queue) {
+      int offset = 0;
+      std::string task_type;
+      if (task.image_type % 2 == 0) {
+        task_type = "color";
+      } else {
+        offset = -1;
+        task_type = "depth";
+      }
+      auto output_path = task.base_dir / task_type;
+      auto file_name = to_string(task.index) + ".png";
+      auto render_file = task.base_dir / task_type / "renders" / file_name;
+      auto cv_render = utils::tensor_to_cv_mat(task.render);
+      if (offset == 0) {
+        cv::imwrite(render_file, cv_render);
+      } else {
+        cv::imwrite(render_file, utils::apply_colormap_to_depth(cv_render));
+      }
+    }
+    save_queue.clear();
+  };
 
-  auto depth_scale = 1.0 / data_loader_ptr->dataparser_ptr_->depth_scale_inv_;
   auto iter_bar = tq::trange(poses.size(0));
   iter_bar.set_prefix("Rendering");
-  static auto p_timer_render = llog::CreateTimer("    render_train_image");
-  for (const auto &i : iter_bar) {
-    p_timer_render->tic();
-    auto render_results = render_image(poses[i].slice(0, 0, 3), 1.0, false);
-    p_timer_render->toc_sum();
-    if (!render_results.empty()) {
-      auto render_color = utils::tensor_to_cv_mat(render_results[0]);
-      video_color.write(render_color);
+  for (const int &i : iter_bar) {
+    auto render_results =
+        render_image(poses[i].slice(0, 0, 3), camera, 1.0f, false);
 
-      auto render_depth = utils::tensor_to_cv_mat(render_results[1]);
-      cv::Mat depth_colormap = utils::apply_colormap_to_depth(render_depth);
+    if (render_results.empty()) {
+      continue;
+    }
+    auto render_color = utils::tensor_to_cv_mat(render_results[0]);
 
-      if (!video_depth.isOpened()) {
-        video_depth = cv::VideoWriter(
-            k_output_path / (image_type_name + "/render_depth.mp4"),
-            video_format, fps, cv::Size(width, height));
-      }
-      video_depth.write(depth_colormap);
+    auto render_depth = utils::tensor_to_cv_mat(render_results[1]);
+    cv::Mat depth_colormap = utils::apply_colormap_to_depth(render_depth);
 
-      std::filesystem::path color_file_name = to_string(i) + ".png";
-      cv::imwrite(render_color_path / color_file_name, render_color);
-      cv::imwrite(render_depth_path / color_file_name, depth_colormap);
+    // Queue image saving tasks
+    save_queue.push_back(
+        {i, image_type, output_dir, render_results[0].clamp(0.0f, 1.0f)});
+    save_queue.push_back({i, image_type + 1, output_dir, render_results[1]});
+
+    // Flush save queue periodically to avoid excessive memory usage
+    if (save_queue.size() >= reserve_size) {
+      flush_save_queue();
     }
   }
-  video_color.release();
-  video_depth.release();
 }
 
 float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
@@ -1214,8 +1259,6 @@ float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
 
   std::filesystem::path color_path = k_output_path / "mid/color";
   std::filesystem::path depth_path = k_output_path / "mid/depth";
-  // std::filesystem::path acc_path = k_output_path / "mid/acc";
-  // std::filesystem::create_directories(acc_path);
   std::filesystem::path scale_path = k_output_path / "mid/scale";
   std::filesystem::create_directories(scale_path);
   std::filesystem::path num_path = k_output_path / "mid/num";
@@ -1236,11 +1279,11 @@ float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
   if (idx < 0) {
     idx = std::rand() % data_loader_ptr->dataparser_ptr_->size(0);
   }
-  auto render_results =
-      render_image(data_loader_ptr->dataparser_ptr_->get_pose(idx, image_type)
-                       .slice(0, 0, 3)
-                       .to(k_device),
-                   1.0, false);
+  auto render_results = render_image(
+      data_loader_ptr->dataparser_ptr_->get_pose(idx, image_type)
+          .slice(0, 0, 3)
+          .to(k_device),
+      data_loader_ptr->dataparser_ptr_->sensor_.camera, 1.0, false);
   float psnr = 0.0f;
   if (!render_results.empty()) {
     auto render_color = render_results[0].clamp(0.0f, 1.0f);
@@ -1419,7 +1462,15 @@ void NeuralSLAM::plot_log(const std::string &log_file) {
 
 void NeuralSLAM::keyboard_loop() {
   while (true) {
-    switch (getchar()) {
+    std::string input;
+    std::getline(std::cin, input);
+
+    if (input.empty()) {
+      continue;
+    }
+
+    char c = input[0];
+    switch (c) {
     case 'm': {
       save_mesh(k_cull_mesh);
       break;
@@ -1449,10 +1500,20 @@ void NeuralSLAM::keyboard_loop() {
       break;
     }
     case 'u': {
-      std::string pose_file =
-          "/home/chrisliu/Projects/rimv2_ws/src/RIM2/data/"
-          "FAST_LIVO2_RIM_Datasets/culture01/inter_color_poses.txt";
-      render_path(pose_file, k_fps);
+      // get pose and camera file from std::string input
+      // the input is: u pose_file camera_file
+      std::string command_text = input.substr(2); // Skip the 'u' and space
+
+      // Find the position of the space between pose_file and camera_file
+      size_t space_pos = command_text.find(' ');
+      if (space_pos == std::string::npos) {
+        std::cout << "Invalid format. Use: u pose_file camera_file\n";
+        break;
+      }
+
+      std::string pose_file = command_text.substr(0, space_pos);
+      std::string camera_file = command_text.substr(space_pos + 1);
+      render_path(pose_file, camera_file, k_fps);
       break;
     }
     case 'v': {
@@ -1806,7 +1867,9 @@ void NeuralSLAM::pub_render_image(std_msgs::Header _header) {
     }
 
     torch::NoGradGuard no_grad;
-    auto render_results = render_image(rviz_pose_, 1.0, false);
+    auto render_results = render_image(
+        rviz_pose_, data_loader_ptr->dataparser_ptr_->sensor_.camera, 1.0,
+        false);
     if (!render_results.empty()) {
       if (rgb_pub.getNumSubscribers() > 0) {
         pub_image(rgb_pub, render_results[0], _header);

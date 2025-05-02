@@ -111,11 +111,13 @@ private:
   void render_image_colormap(int idx);
 
   std::vector<torch::Tensor> render_image(const torch::Tensor &_pose,
+                                          sensor::Cameras &camera,
                                           const float &_scale = 1.0,
                                           const bool &training = true);
 
   void render_path(bool eval, const int &fps = 30, const bool &save = true);
-  void render_path(std::string pose_file, const int &fps = 30);
+  void render_path(std::string pose_file, std::string camera_file,
+                   const int &fps = 30);
 
   float export_test_image(int idx = -1, const std::string &prefix = "");
   void export_checkpoint();
