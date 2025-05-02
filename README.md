@@ -42,9 +42,22 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
   cd ..
   
   sudo apt install python3-catkin-tools # install catkin
-  catkin_make # if lacking memory try restricting number of cores: catkin_make -j8
 ```
 
+#### Build with ROS for visualization
+```bash
+  catkin_make -j8 -DENABLE_ROS=ON
+```
+
+#### (Alternative) Build without ROS
+```bash
+  # Instead of build with catkin_make, you can also build with cmake
+  cd m2mapping_ws/src/m2mapping
+  mkdir build
+  cd build
+  cmake ..
+  make -j8
+```
 ### 3. Data Preparation
 
 - The processed FAST-LIVO2 Datasets and Replica Extrapolation Datasets are available at [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764)
@@ -115,17 +128,17 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
     source devel/setup.bash # or setup.zsh
 
     # Replica
-    ./devel/lib/neural_mapping/neural_mapping_node train src/M2Mapping/config/replica/replica.yaml src/M2Mapping/data/Replica/room2
+    ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/replica/replica.yaml src/M2Mapping/data/Replica/room2
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/replica/replica.yaml src/M2Mapping/data/Replica/room2
 
     # FAST-LIVO2 (ROS installed & ROS bag)
-    ./devel/lib/neural_mapping/neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/fast_livo2_campus.bag
+    ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/fast_livo2_campus.bag
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/fast_livo2_campus.bag
 
     # FAST-LIVO2 (Parsered ROS bag format)
-    ./devel/lib/neural_mapping/neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/color_poses.txt
+    ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/color_poses.txt
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/color_poses.txt
 ```
@@ -135,7 +148,7 @@ After running, the training and evaluation results will be saved in the `src/M2M
 For afterward visualization/evaluation, you can use the following command:
 ```bash
     source devel/setup.bash # or setup.zsh
-    ./devel/lib/neural_mapping/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
+    ./src/M2Mapping/build/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node view src/M2Mapping/output/(your_output_folder)
 ```
@@ -161,7 +174,7 @@ Input `h` + `Enter` to see the help message.
   Drag the view to activate and control the view with the mouse.
 - For post-training visualization, you can use the following command:
   ```bash
-  ./devel/lib/neural_mapping/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
+  ./src/M2Mapping/build/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
   # If ROS is installed, you can also run the following command:
   # rosrun neural_mapping neural_mapping_node view src/M2Mapping/output/(your_output_folder)
 

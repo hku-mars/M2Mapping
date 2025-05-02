@@ -114,12 +114,23 @@ void read_params(const std::filesystem::path &_config_path,
     std::filesystem::create_directories(config_output_dir);
     std::string params_file_path = config_output_dir / "config.yaml";
     // copy _config_path to params_file_path
-    ret = std::system(
-        ("cp " + _config_path.string() + " " + params_file_path).c_str());
-    // write data_path into config.yaml
-    std::ofstream ofs(params_file_path, std::ios::app);
-    ofs << "\ndata_path: " << _data_path;
-    ofs.close();
+    std::cout << ("cp " + _config_path.string() + " " + params_file_path)
+              << '\n';
+    // Check if the source file exists before copying
+    if (std::filesystem::exists(_config_path)) {
+      ret = std::system(
+          ("cp " + _config_path.string() + " " + params_file_path).c_str());
+      if (ret != 0) {
+        std::cerr << "Warning: Failed to copy config file" << '\n';
+      }
+      // write data_path into config.yaml
+      std::ofstream ofs(params_file_path, std::ios::app);
+      ofs << "\ndata_path: " << _data_path;
+      ofs.close();
+    } else {
+      std::cerr << "Warning: Source config file does not exist: "
+                << _config_path << '\n';
+    }
   } else {
     k_output_path = _config_path.parent_path().parent_path();
   }
@@ -242,8 +253,19 @@ void read_scene_params(const std::filesystem::path &_scene_config_path) {
   std::string params_file_path =
       config_output_dir / _scene_config_path.filename();
   // copy _config_path to params_file_path
-  auto ret = std::system(
-      ("cp " + _scene_config_path.string() + " " + params_file_path).c_str());
+  std::cout << ("cp " + _scene_config_path.string() + " " + params_file_path)
+            << '\n';
+  // Check if the source file exists before copying
+  if (std::filesystem::exists(_scene_config_path)) {
+    auto ret = std::system(
+        ("cp " + _scene_config_path.string() + " " + params_file_path).c_str());
+    if (ret != 0) {
+      std::cerr << "Warning: Failed to copy config file" << '\n';
+    }
+  } else {
+    std::cerr << "Warning: Source config file does not exist: "
+              << _scene_config_path << '\n';
+  }
 
   /* Start reading parameters */
   fsSettings["dataset_type"] >> k_dataset_type;
@@ -305,8 +327,20 @@ void read_base_params(const std::filesystem::path &_base_config_path) {
   std::string params_file_path =
       config_output_dir / _base_config_path.filename();
   // copy _config_path to params_file_path
-  auto ret = std::system(
-      ("cp " + _base_config_path.string() + " " + params_file_path).c_str());
+  std::cout << ("cp " + _base_config_path.string() + " " + params_file_path)
+            << '\n';
+
+  // Check if the source file exists before copying
+  if (std::filesystem::exists(_base_config_path)) {
+    auto ret = std::system(
+        ("cp " + _base_config_path.string() + " " + params_file_path).c_str());
+    if (ret != 0) {
+      std::cerr << "Warning: Failed to copy config file" << '\n';
+    }
+  } else {
+    std::cerr << "Warning: Source config file does not exist: "
+              << _base_config_path << '\n';
+  }
 
   /* Start reading parameters */
   fsSettings["debug"] >> k_debug;

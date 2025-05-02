@@ -26,6 +26,8 @@ NeuralSLAM::NeuralSLAM(const int &mode,
                        const std::filesystem::path &_config_path,
                        const std::filesystem::path &_data_path) {
   cout << "TORCH_VERSION: " << TORCH_VERSION << '\n';
+  cout << "config_path: " << _config_path << '\n';
+  cout << "data_path: " << _data_path << '\n';
 
   read_params(_config_path, _data_path, mode);
 
@@ -1259,7 +1261,12 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
             (depth_points_path / file_name).replace_extension(".ply");
         ply_utils::export_to_ply(
             depth_points_file,
-            depth_points.view({-1, 3}).index_select(0, valid_depth_point_idx));
+            depth_points.view({-1, 3}).index_select(0, valid_depth_point_idx),
+            (task.render_color.view({-1, 3})
+                 .index_select(0, valid_depth_point_idx)
+                 .clamp(0.0f, 1.0f) *
+             255)
+                .to(torch::kUInt8));
       }
 
       cv::imwrite(render_file, utils::apply_colormap_to_depth(
