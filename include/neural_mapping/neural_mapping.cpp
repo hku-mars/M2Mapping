@@ -1000,6 +1000,27 @@ void NeuralSLAM::create_dir(const std::filesystem::path &base_path,
   std::filesystem::create_directories(acc_path);
 }
 
+torch::Tensor depth_to_points(const sensor::Cameras &camera,
+                              const torch::Tensor &pose,
+                              const torch::Tensor &depth,
+                              const torch::Tensor &mask = torch::Tensor()) {
+  // [height width 3]
+  static auto zdir = sensor::get_image_coords_zdir(
+      camera.height, camera.width, camera.fx, camera.fy, camera.cx, camera.cy,
+      depth.device());
+  auto pos = pose.slice(1, 3, 4).squeeze().to(depth.device());
+  auto rot = pose.slice(1, 0, 3).to(depth.device());
+  if (mask.defined()) {
+    // [height*width 3]
+    auto dir_C2W = zdir.view({-1, 3}).index_select(0, mask).matmul(rot.t());
+    return dir_C2W * depth.view({-1, 1}).index_select(0, mask) + pos;
+  } else {
+    // [height width 3]
+    auto dir_C2W = zdir.matmul(rot.t());
+    return dir_C2W * depth + pos;
+  }
+}
+
 void NeuralSLAM::render_path(bool eval, const int &fps, const bool &save) {
   // Early exit if evaluation requested with no evaluation data
   if (eval && (data_loader_ptr->dataparser_ptr_->size(
@@ -1196,33 +1217,53 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
     int index;
     int image_type;
     std::filesystem::path base_dir;
-    torch::Tensor render;
+    torch::Tensor render_color;
+    torch::Tensor render_depth;
   };
   std::vector<ImageSaveTask> save_queue;
-  int reserve_size = 16;
+  int reserve_size = 8;
   save_queue.reserve(reserve_size); // Pre-allocate to avoid reallocations
 
   // Periodically flush save queue to avoid excessive memory usage
-  auto flush_save_queue = [&save_queue, this]() {
+  auto flush_save_queue = [&save_queue, &camera, this]() {
 #pragma omp parallel for
     for (const auto &task : save_queue) {
-      int offset = 0;
-      std::string task_type;
-      if (task.image_type % 2 == 0) {
-        task_type = "color";
-      } else {
-        offset = -1;
-        task_type = "depth";
-      }
-      auto output_path = task.base_dir / task_type;
+      auto output_path = task.base_dir / "color";
       auto file_name = to_string(task.index) + ".png";
-      auto render_file = task.base_dir / task_type / "renders" / file_name;
-      auto cv_render = utils::tensor_to_cv_mat(task.render);
-      if (offset == 0) {
-        cv::imwrite(render_file, cv_render);
-      } else {
-        cv::imwrite(render_file, utils::apply_colormap_to_depth(cv_render));
+      auto render_file = task.base_dir / "color" / "renders" / file_name;
+      cv::imwrite(render_file, utils::tensor_to_cv_mat(task.render_color));
+
+      output_path = task.base_dir / "depth";
+      file_name = to_string(task.index) + ".png";
+      render_file = task.base_dir / "depth" / "renders" / file_name;
+      // export depth points
+      bool k_export_depth_points = true;
+      if (k_export_depth_points) {
+        auto depth_points =
+            depth_to_points(camera,
+                            data_loader_ptr->dataparser_ptr_
+                                ->get_pose(task.index, task.image_type)
+                                .slice(0, 0, 3),
+                            task.render_depth);
+        std::filesystem::path depth_points_path =
+            render_file.parent_path().parent_path() / "depth_points";
+        if (!std::filesystem::exists(depth_points_path)) {
+          std::filesystem::create_directories(depth_points_path);
+        }
+        auto valid_depth_point_idx = ((task.render_depth > k_min_range) &
+                                      (task.render_depth < k_max_range))
+                                         .view({-1})
+                                         .nonzero()
+                                         .squeeze();
+        auto depth_points_file =
+            (depth_points_path / file_name).replace_extension(".ply");
+        ply_utils::export_to_ply(
+            depth_points_file,
+            depth_points.view({-1, 3}).index_select(0, valid_depth_point_idx));
       }
+
+      cv::imwrite(render_file, utils::apply_colormap_to_depth(
+                                   utils::tensor_to_cv_mat(task.render_depth)));
     }
     save_queue.clear();
   };
@@ -1242,9 +1283,9 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
     cv::Mat depth_colormap = utils::apply_colormap_to_depth(render_depth);
 
     // Queue image saving tasks
-    save_queue.push_back(
-        {i, image_type, output_dir, render_results[0].clamp(0.0f, 1.0f)});
-    save_queue.push_back({i, image_type + 1, output_dir, render_results[1]});
+    save_queue.push_back({i, image_type, output_dir,
+                          render_results[0].clamp(0.0f, 1.0f),
+                          render_results[1]});
 
     // Flush save queue periodically to avoid excessive memory usage
     if (save_queue.size() >= reserve_size) {
