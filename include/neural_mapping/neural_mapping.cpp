@@ -1700,8 +1700,7 @@ bool NeuralSLAM::end() {
     eval_render();
   }
 
-  // exit(0); // weird memeory leak
-  abort();
+  exit(0);
   return true;
 }
 
