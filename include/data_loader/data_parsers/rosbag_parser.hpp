@@ -134,7 +134,7 @@ struct Rosbag : DataParser {
               auto pos_W_B =
                   torch::tensor({{nearest_pose_msg->pose.pose.position.x},
                                  {nearest_pose_msg->pose.pose.position.y},
-                                 {nearest_pose_msg->pose.pose.position.z}},
+                                 { nearest_pose_msg->pose.pose.position.z }},
                                 torch::kFloat);
               auto quat_W_B =
                   torch::tensor({nearest_pose_msg->pose.pose.orientation.w,
@@ -195,7 +195,7 @@ struct Rosbag : DataParser {
               auto pos_W_B =
                   torch::tensor({{nearest_pose_msg->pose.pose.position.x},
                                  {nearest_pose_msg->pose.pose.position.y},
-                                 {nearest_pose_msg->pose.pose.position.z}},
+                                 { nearest_pose_msg->pose.pose.position.z }},
                                 torch::kFloat);
               auto quat_W_B =
                   torch::tensor({nearest_pose_msg->pose.pose.orientation.w,
@@ -249,7 +249,8 @@ struct Rosbag : DataParser {
 #ifdef ENABLE_ROS
       parser_bag_to_file(bag_path_, pose_topic, color_topic, depth_topic);
 #else
-      throw std::runtime_error("No pose or image data found.");
+      throw std::runtime_error("rosbag parser is not supported without ROS. "
+                               "Please use the parsed dataset.");
 #endif
     }
 

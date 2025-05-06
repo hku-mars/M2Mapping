@@ -224,7 +224,7 @@ Input `h` + `Enter` to see the help message.
   apt install git libdw-dev
   git clone https://github.com/hku-mars/M2Mapping.git --recursive
   cd ..
-  catkin_make # if lacking memory try restricting number of cores: catkin_make -j8
+  catkin_make -DENABLE_ROS=ON # if lacking memory try restricting number of cores: catkin_make -j8
 
   # Image export
   enroot export --output m2mapping.sqsh m2mapping

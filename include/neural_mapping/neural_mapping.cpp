@@ -1559,8 +1559,8 @@ void NeuralSLAM::keyboard_loop() {
         break;
       }
 
-      std::string pose_file = command_text.substr(0, space_pos);
-      std::string camera_file = command_text.substr(space_pos + 1);
+      std::string camera_file = command_text.substr(0, space_pos);
+      std::string pose_file = command_text.substr(space_pos + 1);
       render_path(pose_file, camera_file, k_fps);
       break;
     }
