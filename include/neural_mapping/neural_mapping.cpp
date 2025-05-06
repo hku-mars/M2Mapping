@@ -1251,21 +1251,71 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
         if (!std::filesystem::exists(depth_points_path)) {
           std::filesystem::create_directories(depth_points_path);
         }
-        auto valid_depth_point_idx = ((task.render_depth > k_min_range) &
-                                      (task.render_depth < k_max_range))
-                                         .view({-1})
-                                         .nonzero()
-                                         .squeeze();
-        auto depth_points_file =
-            (depth_points_path / file_name).replace_extension(".ply");
-        ply_utils::export_to_ply(
-            depth_points_file,
-            depth_points.view({-1, 3}).index_select(0, valid_depth_point_idx),
-            (task.render_color.view({-1, 3})
-                 .index_select(0, valid_depth_point_idx)
-                 .clamp(0.0f, 1.0f) *
-             255)
-                .to(torch::kUInt8));
+        static bool output_pcd = true;
+        if (output_pcd) {
+          auto depth_points_file =
+              (depth_points_path / file_name).replace_extension(".pcd");
+
+          // Create PCL point cloud with organized structure (maintains image
+          // layout)
+          pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(
+              new pcl::PointCloud<pcl::PointXYZRGB>);
+
+          // Set cloud dimensions to match the image dimensions
+          cloud->width = task.render_depth.size(1);  // Image width
+          cloud->height = task.render_depth.size(0); // Image height
+          cloud->is_dense = false; // There may be invalid points (NaN)
+          cloud->points.resize(cloud->width * cloud->height);
+
+          // Convert color image to proper format for point cloud
+          auto colors =
+              (task.render_color.clamp(0.0f, 1.0f) * 255).to(torch::kUInt8);
+
+          // Copy point data to PCL cloud while maintaining image structure
+          for (int h = 0; h < cloud->height; h++) {
+            for (int w = 0; w < cloud->width; w++) {
+              int idx = h * cloud->width + w;
+
+              // Check if this is a valid depth point
+              float depth_value = task.render_depth[h][w].item<float>();
+              if (depth_value > k_min_range && depth_value < k_max_range) {
+                cloud->points[idx].x = depth_points[h][w][0].item<float>();
+                cloud->points[idx].y = depth_points[h][w][1].item<float>();
+                cloud->points[idx].z = depth_points[h][w][2].item<float>();
+                cloud->points[idx].r = colors[h][w][0].item<uint8_t>();
+                cloud->points[idx].g = colors[h][w][1].item<uint8_t>();
+                cloud->points[idx].b = colors[h][w][2].item<uint8_t>();
+              } else {
+                // For invalid points, set to NaN
+                cloud->points[idx].x = std::numeric_limits<float>::quiet_NaN();
+                cloud->points[idx].y = std::numeric_limits<float>::quiet_NaN();
+                cloud->points[idx].z = std::numeric_limits<float>::quiet_NaN();
+                cloud->points[idx].r = 0;
+                cloud->points[idx].g = 0;
+                cloud->points[idx].b = 0;
+              }
+            }
+          }
+
+          // Save as organized PCD
+          pcl::io::savePCDFile(depth_points_file.string(), *cloud, false);
+        } else {
+          auto valid_depth_point_idx = ((task.render_depth > k_min_range) &
+                                        (task.render_depth < k_max_range))
+                                           .view({-1})
+                                           .nonzero()
+                                           .squeeze();
+          auto depth_points_file =
+              (depth_points_path / file_name).replace_extension(".ply");
+          ply_utils::export_to_ply(
+              depth_points_file,
+              depth_points.view({-1, 3}).index_select(0, valid_depth_point_idx),
+              (task.render_color.view({-1, 3})
+                   .index_select(0, valid_depth_point_idx)
+                   .clamp(0.0f, 1.0f) *
+               255)
+                  .to(torch::kUInt8));
+        }
       }
 
       cv::imwrite(render_file, utils::apply_colormap_to_depth(

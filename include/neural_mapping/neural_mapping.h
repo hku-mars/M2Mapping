@@ -8,6 +8,10 @@
 #include <ros/ros.h>
 #endif
 
+// Add PCL headers for PCD file support
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+
 #include "data_loader/data_loader.h"
 #include "neural_net/local_map.h"
 #include "rog_map_cuda/rog_map_class.cuh"
