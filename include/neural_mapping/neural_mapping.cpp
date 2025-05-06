@@ -1180,13 +1180,11 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
     return;
   }
 
+  sensor::Cameras camera = data_loader_ptr->dataparser_ptr_->sensor_.camera;
   cv::FileStorage fsSettings(camera_file, cv::FileStorage::READ);
-  if (!fsSettings.isOpened()) {
-    std::cerr << "ERROR: Wrong path to settings: " << camera_file << "\n";
-    exit(-1);
-  }
-  sensor::Cameras camera;
-  if (!fsSettings["camera"].isNone()) {
+  if (fsSettings.isOpened() && (!fsSettings["camera"].isNone())) {
+    std::cerr << "Load camera params from: " << camera_file << "\n";
+
     camera.model = fsSettings["camera"]["model"];
     camera.width = fsSettings["camera"]["width"];
     camera.height = fsSettings["camera"]["height"];
@@ -1200,6 +1198,7 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
         fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
         fsSettings["camera"]["d4"]);
   }
+
   c10::cuda::CUDACachingAllocator::emptyCache();
 
   int image_type = 0;
@@ -1559,8 +1558,8 @@ void NeuralSLAM::keyboard_loop() {
         break;
       }
 
-      std::string camera_file = command_text.substr(0, space_pos);
-      std::string pose_file = command_text.substr(space_pos + 1);
+      std::string pose_file = command_text.substr(0, space_pos);
+      std::string camera_file = command_text.substr(space_pos + 1);
       render_path(pose_file, camera_file, k_fps);
       break;
     }
