@@ -1007,9 +1007,9 @@ torch::Tensor depth_to_points(const sensor::Cameras &camera,
                               const torch::Tensor &depth,
                               const torch::Tensor &mask = torch::Tensor()) {
   // [height width 3]
-  static auto zdir = sensor::get_image_coords_zdir(
+  static auto zdir = sensor::get_image_coords_ndir(
       camera.height, camera.width, camera.fx, camera.fy, camera.cx, camera.cy,
-      depth.device());
+      depth.device())[0];
   auto pos = pose.slice(1, 3, 4).squeeze().to(depth.device());
   auto rot = pose.slice(1, 0, 3).to(depth.device());
   if (mask.defined()) {
