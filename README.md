@@ -10,6 +10,7 @@ A MultiModal Mapping (M2Mapping) Framework for LiDAR-Visual Systems.
 [Project page](https://jianhengliu.github.io/Projects/M2Mapping/) | [Paper](https://arxiv.org/pdf/2409.05310) | [Video](https://www.youtube.com/watch?v=XFzzAGVbzek) | [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764) | [M2Mapping Results](https://furtive-lamprey-00b.notion.site/M2Mapping-Results-bf02b1b1ebbd443099e2f076019d1c51)
 
 Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic research, please cite the following paper:
+
 ```
 @article{liu2024neural,
     title={Neural Surface Reconstruction and Rendering for LiDAR-Visual Systems}, 
@@ -22,6 +23,7 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 ### 2. Installation
 
 - Tested on Ubuntu 20.04, cuda 11.8
+
 > The software not relies on ROS, but under ROS noetic installed, the installation should be easier.
 > And if real-time visualization is needed, ROS is required and refer to the [Visualization](#3-visualization) section.
 
@@ -45,11 +47,13 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 ```
 
 #### Build with ROS for visualization
+
 ```bash
   catkin_make -j8 -DENABLE_ROS=ON
 ```
 
 #### (Alternative) Build without ROS
+
 ```bash
   # Instead of build with catkin_make, you can also build with cmake
   cd m2mapping_ws/src/m2mapping
@@ -58,6 +62,7 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
   cmake ..
   make -j8
 ```
+
 ### 3. Data Preparation
 
 - The processed FAST-LIVO2 Datasets and Replica Extrapolation Datasets are available at [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764)
@@ -90,9 +95,10 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
   ```
 
 #### 3.2. FAST-LIVO2 Datasets
-- Download either Rosbag or Parsered Data in [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764).
 
+- Download either Rosbag or Parsered Data in [M2Mapping Datasets](https://furtive-lamprey-00b.notion.site/M2Mapping-Datasets-e6318dcd710e4a9d8a4f4b3fbe176764).
 - Arrange the data as follows:
+
   - For Rosbag:
     ```bash
     ├── data
@@ -111,16 +117,17 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
     │   │   │   ├── depth_poses.txt
     ```
 
-
 #### 3.3. Custom FAST-LIVO2 Datasets
 
 - Clone the [modified-FAST-LIVO2](https://github.com/jianhengLiu/FAST-LIVO2) repo; install and run FAST-LIVO2 as the official instruction. The overall pipeline as:
   ```bash
+  # 1. open a terminal to start LIVO
   roslaunch fast_livo mapping_avia.launch
-  rosbag play YOUR_DOWNLOADED.bag
+  # 2. open another terminal to get ready for bag recording
   rosbag record /aft_mapped_to_init /origin_img /cloud_registered_body /tf /tf_static /path -O "fast_livo2_YOUR_DOWNLOADED" -b 2048
+  # 3. open another terminal to play your downloaded/collected bag
+  rosbag play YOUR_DOWNLOADED.bag
   ```
-
 
 ### 4. Run
 
@@ -146,19 +153,22 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
 After running, the training and evaluation results will be saved in the `src/M2Mapping/output` directory.
 
 For afterward visualization/evaluation, you can use the following command:
+
 ```bash
     source devel/setup.bash # or setup.zsh
     ./src/M2Mapping/build/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node view src/M2Mapping/output/(your_output_folder)
 ```
+
 Input `h` + `Enter` to see the help message.
 
 ### 5. Visualization
 
 - Tested on Ubuntu 20.04, cuda 11.8, ROS Noetic
 - We use RVIZ for visualization for now. Please install ROS Noetic following the [official guide](http://wiki.ros.org/noetic/Installation/Ubuntu) or refer to the [Docker](#6-docker) 'ROS Installation' section.
-- Re-build the packege: 
+- Re-build the packege:
+
   ```bash
   cd src
   git clone https://github.com/jianhengLiu/rviz_map_plugin.git
@@ -167,12 +177,15 @@ Input `h` + `Enter` to see the help message.
   catkin_make -DENABLE_ROS=ON
   ```
 - Run the following command to visualize the map in real-time:
+
   ```bash
   source devel/setup.bash # or setup.zsh
   roslaunch neural_mapping rviz.launch
   ```
+
   Drag the view to activate and control the view with the mouse.
 - For post-training visualization, you can use the following command:
+
   ```bash
   ./src/M2Mapping/build/neural_mapping_node view src/M2Mapping/output/(your_output_folder)
   # If ROS is installed, you can also run the following command:
