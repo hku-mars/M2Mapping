@@ -1431,7 +1431,7 @@ float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
 
     // eval color
     c10::cuda::CUDACachingAllocator::emptyCache();
-    auto eval_python_cmd = "python " + k_package_path.string() +
+    auto eval_python_cmd = "python3 " + k_package_path.string() +
                            "/eval/image_metrics/metrics_single.py --gt_color " +
                            (gt_color_path / gt_color_file_name).string() +
                            " --renders_color " +
@@ -1488,7 +1488,7 @@ void NeuralSLAM::eval_mesh() {
   auto gt_mesh_path = data_loader_ptr->dataparser_ptr_->get_gt_mesh_path();
   if (std::filesystem::exists(gt_mesh_path)) {
     c10::cuda::CUDACachingAllocator::emptyCache();
-    auto eval_python_cmd = "python " + k_package_path.string() +
+    auto eval_python_cmd = "python3 " + k_package_path.string() +
                            "/eval/structure_metrics/evaluator.py --pred_mesh " +
                            k_output_path.string();
     if (k_cull_mesh) {
@@ -1513,7 +1513,7 @@ void NeuralSLAM::eval_mesh() {
 
 void NeuralSLAM::eval_render() {
   c10::cuda::CUDACachingAllocator::emptyCache();
-  auto eval_python_cmd = "python " + k_package_path.string() +
+  auto eval_python_cmd = "python3 " + k_package_path.string() +
                          "/eval/image_metrics/metrics.py -m " +
                          (k_output_path / "train/color").string();
   std::cout << BLUE
@@ -1521,7 +1521,7 @@ void NeuralSLAM::eval_render() {
             << "\033[0m\n";
   int ret = std::system(eval_python_cmd.c_str());
 
-  eval_python_cmd = "python " + k_package_path.string() +
+  eval_python_cmd = "python3 " + k_package_path.string() +
                     "/eval/image_metrics/metrics.py -m " +
                     (k_output_path / "eval/color").string();
   std::cout << BLUE
@@ -1529,7 +1529,7 @@ void NeuralSLAM::eval_render() {
             << "\033[0m\n";
   ret = std::system(eval_python_cmd.c_str());
 
-  eval_python_cmd = "python " + k_package_path.string() +
+  eval_python_cmd = "python3 " + k_package_path.string() +
                     "/eval/image_metrics/metrics.py -m " +
                     (k_output_path / "test/color").string();
   std::cout << BLUE
@@ -1550,7 +1550,7 @@ void NeuralSLAM::export_timing(bool print) {
 
 void NeuralSLAM::plot_log(const std::string &log_file) {
   c10::cuda::CUDACachingAllocator::emptyCache();
-  auto cmd = "python " + k_package_path.string() + "/eval/draw_loss.py -l " +
+  auto cmd = "python3 " + k_package_path.string() + "/eval/draw_loss.py -l " +
              (k_output_path / log_file).string();
   std::cout << BLUE << "Conducting draw_loss command: " << cmd << "\033[0m\n";
   auto ret = std::system(cmd.c_str());
