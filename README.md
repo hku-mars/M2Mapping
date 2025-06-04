@@ -128,6 +128,7 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
   # 3. open another terminal to play your downloaded/collected bag
   rosbag play YOUR_DOWNLOADED.bag
   ```
+> Warning: The modified-FAST-LIVO2 outputs the original size of the image, therefore if you try to reproduce the FAST-LIVO2 results from the original FAST-LIVO2 repo, you need to change the intrinsic parameters in cofig files into the original intrinsic parameters of the camera.
 
 ### 4. Run
 
