@@ -969,10 +969,8 @@ std::vector<torch::Tensor> NeuralSLAM::render_image(const torch::Tensor &_pose,
   p_t_trace->toc_sum();
   p_timer_render->toc_sum();
 
-  long scale_height =
-      _scale * data_loader_ptr->dataparser_ptr_->sensor_.camera.height;
-  long scale_width =
-      _scale * data_loader_ptr->dataparser_ptr_->sensor_.camera.width;
+  long scale_height = _scale * camera.height;
+  long scale_width = _scale * camera.width;
   return {render_colors.view({scale_height, scale_width, 3}),
           render_depths.view({scale_height, scale_width, 1}),
           render_accs.view({scale_height, scale_width, 1}),
@@ -1181,22 +1179,26 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
   }
 
   sensor::Cameras camera = data_loader_ptr->dataparser_ptr_->sensor_.camera;
-  cv::FileStorage fsSettings(camera_file, cv::FileStorage::READ);
-  if (fsSettings.isOpened() && (!fsSettings["camera"].isNone())) {
-    std::cerr << "Load camera params from: " << camera_file << "\n";
+  if (camera_file != "") {
+    cv::FileStorage fsSettings(camera_file, cv::FileStorage::READ);
+    if (fsSettings.isOpened()) {
+      if (!fsSettings["camera"].isNone()) {
+        std::cerr << "Load camera params from: " << camera_file << "\n";
 
-    camera.model = fsSettings["camera"]["model"];
-    camera.width = fsSettings["camera"]["width"];
-    camera.height = fsSettings["camera"]["height"];
-    camera.fx = fsSettings["camera"]["fx"];
-    camera.fy = fsSettings["camera"]["fy"];
-    camera.cx = fsSettings["camera"]["cx"];
-    camera.cy = fsSettings["camera"]["cy"];
+        camera.model = fsSettings["camera"]["model"];
+        camera.width = fsSettings["camera"]["width"];
+        camera.height = fsSettings["camera"]["height"];
+        camera.fx = fsSettings["camera"]["fx"];
+        camera.fy = fsSettings["camera"]["fy"];
+        camera.cx = fsSettings["camera"]["cx"];
+        camera.cy = fsSettings["camera"]["cy"];
 
-    camera.set_distortion(
-        fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
-        fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
-        fsSettings["camera"]["d4"]);
+        camera.set_distortion(
+            fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
+            fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
+            fsSettings["camera"]["d4"]);
+      }
+    }
   }
 
   c10::cuda::CUDACachingAllocator::emptyCache();
@@ -1694,6 +1696,16 @@ void NeuralSLAM::keyboard_loop() {
                 << "\n";
       break;
     }
+    case 'l': {
+      // if k_dataset_path is a file
+      std::filesystem::path dataset_path = k_dataset_path;
+      if (std::filesystem::is_regular_file(k_dataset_path)) {
+        dataset_path = k_dataset_path.parent_path();
+      }
+      std::string pose_file = dataset_path / "inter_color_poses.txt";
+      render_path(pose_file);
+      break;
+    }
     case 'h': {
       std::cout << "Keyboard Controls:\n";
       std::cout << "  h: Display this help menu\n";
@@ -1747,6 +1759,22 @@ bool NeuralSLAM::end() {
     render_path(false, k_fps);
     render_path(true, 2);
     eval_render();
+
+    // if k_dataset_path is a file
+    std::filesystem::path dataset_path = k_dataset_path;
+    if (std::filesystem::is_regular_file(k_dataset_path)) {
+      dataset_path = k_dataset_path.parent_path();
+    }
+    auto eval_python_cmd = "python " + k_package_path.string() +
+                           "/eval/inter_poses.py --data_dir " +
+                           dataset_path.string() +
+                           " --key_poses skip --skip 50 --n_out_poses 500";
+    std::cout << "\033[34mInterpolating Path Generation command: "
+              << eval_python_cmd << "\033[0m\n";
+    int ret = std::system(eval_python_cmd.c_str());
+
+    std::string pose_file = dataset_path / "inter_color_poses.txt";
+    render_path(pose_file);
   }
 
   exit(0);
