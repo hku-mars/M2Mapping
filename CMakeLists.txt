@@ -66,7 +66,7 @@ find_package(Torch REQUIRED)
 add_subdirectory(submodules/ROG-Map)
 include_directories(submodules/ROG-Map/include)
 
-include_directories(${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} include)
+include_directories(${OpenCV_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} include)
 
 # Add include directories for ROS if enabled
 if(ENABLE_ROS)
