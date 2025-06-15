@@ -183,7 +183,7 @@ Input `h` + `Enter` to see the help message.
   source devel/setup.bash # or setup.zsh
   roslaunch neural_mapping rviz.launch
   ```
-  Clip the `FPS Motion` button to enable FPS control, and you can use the `W`, `A`, `S`, `D` keys to move around the map. Drag the view to activate and control the view with the mouse.
+  Click the `FPS Motion` button to enable FPS control, and you can use the `W`, `A`, `S`, `D` keys to move around the map. Drag the view to activate and control the view with the mouse.
 - For post-training visualization, you can use the following command:
 
   ```bash
