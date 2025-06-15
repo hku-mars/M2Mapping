@@ -173,7 +173,7 @@ Input `h` + `Enter` to see the help message.
   ```bash
   cd src
   git clone https://github.com/jianhengLiu/rviz_map_plugin.git
-  git clone https://github.com/jianhengLiu/rviz_cinematographer.git
+  git clone https://github.com/jianhengLiu/rviz_fps_plugin.git
   sudo apt install ros-noetic-mesh-msgs ros-noetic-rviz-animated-view-controller ros-noetic-hdf5-map-io
   catkin_make -DENABLE_ROS=ON
   ```
@@ -183,8 +183,7 @@ Input `h` + `Enter` to see the help message.
   source devel/setup.bash # or setup.zsh
   roslaunch neural_mapping rviz.launch
   ```
-
-  Drag the view to activate and control the view with the mouse.
+  Clip the `FPS Motion` button to enable FPS control, and you can use the `W`, `A`, `S`, `D` keys to move around the map. Drag the view to activate and control the view with the mouse.
 - For post-training visualization, you can use the following command:
 
   ```bash
