@@ -10,9 +10,10 @@ struct Fastlivo : Rosbag {
   explicit Fastlivo(const std::filesystem::path &_bag_path,
                     const torch::Device &_device = torch::kCPU,
                     const bool &_preload = true, const float &_res_scale = 1.0,
-                    const sensor::Sensors &_sensor = sensor::Sensors())
+                    const sensor::Sensors &_sensor = sensor::Sensors(),
+                    const int &_ds_pt_num = 1e5)
       : Rosbag(_bag_path, _device, _preload, _res_scale,
-               coords::SystemType::OpenCV, _sensor) {
+               coords::SystemType::OpenCV, _sensor, _ds_pt_num) {
     depth_type_ = DepthType::PLY;
 
     dataset_name_ = bag_path_.filename();
@@ -26,9 +27,9 @@ struct Fastlivo : Rosbag {
     load_intrinsics();
 
     load_data();
-    if (std::filesystem::exists(pose_path_)) {
-    } else {
-      std::cout << "pose_path_ does not exist: " << pose_path_ << std::endl;
+    if (!std::filesystem::exists(color_pose_path_)) {
+      std::cout << "color_pose_path_ does not exist: " << color_pose_path_
+                << std::endl;
     }
   }
 

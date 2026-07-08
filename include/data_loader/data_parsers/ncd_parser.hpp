@@ -26,7 +26,7 @@ struct NewerCollege : DataParser {
     dataset_path_ = dataset_path_.parent_path();
     std::cout << dataset_path_ << std::endl;
 
-    pose_path_ = dataset_path_ / "ground_truth";
+    color_pose_path_ = dataset_path_ / "ground_truth";
     color_path_ = dataset_path_ / "results";
     depth_path_ = color_path_;
 
@@ -41,13 +41,15 @@ struct NewerCollege : DataParser {
   std::filesystem::path gt_mesh_path_;
 
   void load_data() override {
-    depth_poses_ = load_poses(pose_path_, false, 1)[0];
+    depth_type_ = DepthType::Image;
+    depth_poses_ = std::get<0>(load_poses(color_pose_path_, false, 1));
     TORCH_CHECK(depth_poses_.size(0) > 0);
+    color_poses_ = depth_poses_;
 
     load_colors(".jpg", "frame", false, true);
-    TORCH_CHECK(depth_poses_.size(0) == color_filelists_.size());
-    load_depths(".png", "depth", false, true);
-    TORCH_CHECK(color_filelists_.size() == depth_filelists_.size());
+    TORCH_CHECK(depth_poses_.size(0) == raw_color_filelists_.size());
+    load_depths(depth_type_, "depth", false, true);
+    TORCH_CHECK(raw_color_filelists_.size() == raw_depth_filelists_.size());
   }
 
   void load_intrinsics() override {

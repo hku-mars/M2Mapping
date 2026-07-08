@@ -1,4 +1,5 @@
 #include "params.h"
+#include <fstream>
 #include <opencv2/opencv.hpp>
 
 #ifdef ENABLE_ROS
@@ -18,7 +19,7 @@ std::filesystem::path k_dataset_path;
 
 int k_ds_pt_num, k_max_pt_num;
 
-std::filesystem::path k_output_path, k_package_path;
+std::filesystem::path k_output_path, k_package_path, k_source_path;
 
 torch::Device k_device = torch::kCPU;
 // parameter
@@ -143,6 +144,15 @@ void read_params(const std::filesystem::path &_config_path,
     exit(-1);
   }
 
+  // Decouple resource root from output root: `package_path` (when provided)
+  // points at the M2Mapping source repo that ships config/ROG-Map and eval/.
+  if (!fsSettings["package_path"].isNone()) {
+    k_source_path = std::string(fsSettings["package_path"]);
+  } else {
+    k_source_path = k_package_path;
+  }
+  std::cout << "source_path: " << k_source_path << '\n';
+
   if (fsSettings["data_path"].empty()) {
     k_dataset_path = _data_path;
   } else {
@@ -179,18 +189,36 @@ void read_params(const std::filesystem::path &_config_path,
   fsSettings["sphere_trace_thr"] >> k_sphere_trace_thr;
 
   if (!fsSettings["camera"].isNone()) {
-    k_sensor.camera.model = fsSettings["camera"]["model"];
-    k_sensor.camera.width = fsSettings["camera"]["width"];
-    k_sensor.camera.height = fsSettings["camera"]["height"];
-    k_sensor.camera.fx = fsSettings["camera"]["fx"];
-    k_sensor.camera.fy = fsSettings["camera"]["fy"];
-    k_sensor.camera.cx = fsSettings["camera"]["cx"];
-    k_sensor.camera.cy = fsSettings["camera"]["cy"];
-
-    k_sensor.camera.set_distortion(
-        fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
-        fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
-        fsSettings["camera"]["d4"]);
+    if (!fsSettings["camera"]["model"].isNone()) {
+      k_sensor.camera.model = fsSettings["camera"]["model"];
+    }
+    if (!fsSettings["camera"]["width"].isNone()) {
+      k_sensor.camera.width = fsSettings["camera"]["width"];
+    }
+    if (!fsSettings["camera"]["height"].isNone()) {
+      k_sensor.camera.height = fsSettings["camera"]["height"];
+    }
+    if (!fsSettings["camera"]["fx"].isNone()) {
+      k_sensor.camera.fx = fsSettings["camera"]["fx"];
+    }
+    if (!fsSettings["camera"]["fy"].isNone()) {
+      k_sensor.camera.fy = fsSettings["camera"]["fy"];
+    }
+    if (!fsSettings["camera"]["cx"].isNone()) {
+      k_sensor.camera.cx = fsSettings["camera"]["cx"];
+    }
+    if (!fsSettings["camera"]["cy"].isNone()) {
+      k_sensor.camera.cy = fsSettings["camera"]["cy"];
+    }
+    if (!fsSettings["camera"]["scale"].isNone()) {
+      k_sensor.camera.scale = fsSettings["camera"]["scale"];
+    }
+    if (!fsSettings["camera"]["d0"].isNone()) {
+      k_sensor.camera.set_distortion(
+          fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
+          fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
+          fsSettings["camera"]["d4"]);
+    }
   }
   if (!fsSettings["extrinsic"].isNone()) {
     cv::Mat cv_T_C_L;
@@ -208,11 +236,24 @@ void read_params(const std::filesystem::path &_config_path,
     k_sensor.T_B_C = k_sensor.T_B_L.matmul(k_sensor.T_C_L.inverse());
   }
   if (!fsSettings["map"].isNone()) {
-    cv::Mat cv_map_origin;
-    fsSettings["map"]["map_origin"] >> cv_map_origin;
-    cv_map_origin.convertTo(cv_map_origin, CV_32FC1);
-    k_map_origin =
-        torch::from_blob(cv_map_origin.data, {3}, torch::kFloat32).clone();
+    // map_origin is optional: it is only an initial placeholder and gets
+    // overwritten by the point-cloud center in build_occ_map(). Default to
+    // zeros when absent (e.g. COLMAP configs) to avoid dereferencing a null
+    // cv::Mat buffer in torch::from_blob.
+    if (!fsSettings["map"]["map_origin"].isNone()) {
+      cv::Mat cv_map_origin;
+      fsSettings["map"]["map_origin"] >> cv_map_origin;
+      cv_map_origin.convertTo(cv_map_origin, CV_32FC1);
+      if (!cv_map_origin.empty() &&
+          cv_map_origin.total() >= 3 && cv_map_origin.data != nullptr) {
+        k_map_origin =
+            torch::from_blob(cv_map_origin.data, {3}, torch::kFloat32).clone();
+      } else {
+        k_map_origin = torch::zeros({3}, torch::kFloat32);
+      }
+    } else {
+      k_map_origin = torch::zeros({3}, torch::kFloat32);
+    }
 
     fsSettings["map"]["map_size"] >> k_inner_map_size;
     k_x_max = 0.5f * k_inner_map_size;
@@ -401,6 +442,7 @@ void write_pt_params() {
       << cv_map_origin << '\n';
   ofs << "inner_map_size: " << k_inner_map_size << '\n';
   ofs << "package_path: " << k_package_path.string() << '\n';
+  ofs << "source_path: " << k_source_path.string() << '\n';
 }
 
 void read_pt_params() {
@@ -432,4 +474,9 @@ void read_pt_params() {
     k_fill_level = k_octree_level;
   }
   k_package_path = fsSettings["package_path"];
+  if (!fsSettings["source_path"].isNone()) {
+    k_source_path = std::string(fsSettings["source_path"]);
+  } else {
+    k_source_path = k_package_path;
+  }
 }

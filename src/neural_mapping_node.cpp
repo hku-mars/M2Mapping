@@ -5,11 +5,12 @@
 #include <thread>
 #endif
 
-#define BACKWARD_HAS_DW 1
+#ifdef ENABLE_BACKWARD
 #include "backward.hpp"
 namespace backward {
 backward::SignalHandling sh;
 }
+#endif
 
 /**
  * @brief Main entry point for the neural_mapping node

@@ -8,9 +8,10 @@ namespace dataparser {
 struct Kitti : DataParser {
   explicit Kitti(const std::filesystem::path &_dataset_lidar_path,
                  const torch::Device &_device = torch::kCPU,
-                 const bool &_preload = true, const float &_res_scale = 1.0)
+                 const bool &_preload = true, const float &_res_scale = 1.0,
+                 const int &_ds_pt_num = 1e5)
       : DataParser(_dataset_lidar_path, _device, _preload, _res_scale,
-                   coords::SystemType::OpenCV) {
+                   coords::SystemType::OpenCV, sensor::Sensors(), _ds_pt_num) {
     depth_type_ = DepthType::BIN;
 
     // KITTI/data_odometry_velodyne/dataset/sequences/00
@@ -20,7 +21,7 @@ struct Kitti : DataParser {
     auto base_path = (dataset_path_ / "../../../..").lexically_normal();
     calib_path_ = base_path / "data_odometry_calib/dataset/sequences" /
                   dataset_name_ / "calib.txt";
-    pose_path_ = base_path / "data_odometry_poses/dataset/poses" /
+    color_pose_path_ = base_path / "data_odometry_poses/dataset/poses" /
                  (dataset_name_.string() + ".txt");
     color_path_ = base_path / "data_odometry_color/dataset/sequences" /
                   dataset_name_ / "image_2";
@@ -33,7 +34,7 @@ struct Kitti : DataParser {
 
   void load_data() override {
 
-    auto T_C0_C0 = load_poses(pose_path_, false, 2)[0];
+    auto T_C0_C0 = std::get<0>(load_poses(color_pose_path_, false, 2));
     TORCH_CHECK(T_C0_C0.size(0) > 0);
     auto T_W_C0 =
         coords::change_world_system(T_C0_C0, coords::SystemType::Kitti);
@@ -42,7 +43,7 @@ struct Kitti : DataParser {
 
     load_colors(".png", "", false, true);
     TORCH_CHECK(color_poses_.size(0) == raw_color_filelists_.size());
-    load_depths(".bin", "", false, true);
+    load_depths(depth_type_, "", false, true);
     TORCH_CHECK(depth_poses_.size(0) == raw_depth_filelists_.size());
   }
 

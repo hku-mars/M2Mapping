@@ -1,7 +1,7 @@
 #pragma once
 #include "base_parser.h"
-#include "utils/sensor_utils/cameras.hpp"
 #include "utils/coordinates.h"
+#include "utils/sensor_utils/cameras.hpp"
 
 namespace dataparser {
 struct NeuralRGBD : DataParser {
@@ -9,10 +9,12 @@ struct NeuralRGBD : DataParser {
                       const torch::Device &_device = torch::kCPU,
                       const bool &_preload = true,
                       const float &_res_scale = 1.0, const int &_depth_type = 0,
-                      const int &_dataset_system_type = 2)
+                      const int &_dataset_system_type = 2,
+                      const int &_ds_pt_num = 0)
       : DataParser(_dataset_path, _device, _preload, _res_scale,
                    _dataset_system_type) {
-    pose_path_ = dataset_path_ / "poses.txt";
+    depth_type_ = DepthType::Image;
+    color_pose_path_ = dataset_path_ / "poses.txt";
     color_path_ = dataset_path_ / "images";
     switch (_depth_type) {
     case 0:
@@ -40,7 +42,7 @@ struct NeuralRGBD : DataParser {
   std::filesystem::path gt_mesh_path_;
 
   void load_data() override {
-    depth_poses_ = load_poses(pose_path_, false, 0)[0];
+    depth_poses_ = std::get<0>(load_poses(color_pose_path_, false, 0));
     TORCH_CHECK(depth_poses_.size(0) > 0);
     /* // https://github.com/PRBonn/semantic-kitti-api/issues/115
     // https://github.com/PRBonn/kiss-icp/issues/156#issuecomment-1551695713
@@ -54,7 +56,7 @@ struct NeuralRGBD : DataParser {
 
     load_colors(".png", "img", false, true);
     TORCH_CHECK(depth_poses_.size(0) == raw_color_filelists_.size());
-    load_depths(".png", "depth", false, true);
+    load_depths(depth_type_, "depth", false, true);
     TORCH_CHECK(raw_color_filelists_.size() == raw_depth_filelists_.size());
   }
 

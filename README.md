@@ -127,8 +127,50 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
   rosbag record /aft_mapped_to_init /origin_img /cloud_registered_body /tf /tf_static /path -O "fast_livo2_YOUR_DOWNLOADED" -b 2048
   # 3. open another terminal to play your downloaded/collected bag
   rosbag play YOUR_DOWNLOADED.bag
+  # 4. convert the recorded rosbag into COLMAP format (see scripts/rosbag_convert/README.md for all options)
+  python3 scripts/rosbag_convert/rosbag_to_colmap.py \
+    --bag_path data/YOUR_BAG_NAME.bag \
+    --image_topic /origin_img/compressed \
+    --image_pose_topic /aft_mapped_to_init_cam \
+    --point_topic /cloud_registered_body \
+    --point_pose_topic /aft_mapped_to_init_lidar \
+    --output_dir data/YOUR_BAG_NAME_colmap \
+    --fx [fx] --fy [fy] --cx [cx] --cy [cy] \
+    --width [width] --height [height] \
+    --k1=[k1] --k2=[k2] --p1=[p1] --p2=[p2]
+  # 5. run M2Mapping with the converted COLMAP-format data (see 3.4)
+  ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/colmap/colmap_example.yaml data/YOUR_BAG_NAME_colmap
   ```
 > Warning: The modified-FAST-LIVO2 outputs the original size of the image, therefore if you try to reproduce the FAST-LIVO2 results from the original FAST-LIVO2 repo, you need to change the intrinsic parameters in cofig files into the original intrinsic parameters of the camera.
+
+#### 3.4. COLMAP-format Datasets
+
+- Besides the rosbag / parsed FAST-LIVO2 layouts above, M2Mapping can also
+  consume [COLMAP-txt-format](https://colmap.github.io/format.html) datasets
+  (including multi-camera captures). Arrange the data as follows:
+  ```bash
+  ├── data
+  │   ├── colmap_dataset
+  │   │   ├── cameras.txt
+  │   │   ├── images.txt
+  │   │   ├── depths.txt      # optional, LiDAR/depth poses (same format as images.txt)
+  │   │   ├── images/
+  │   │   ├── depths/         # optional, per-frame depth maps or point clouds
+  ```
+  - `cameras.txt` / `images.txt` follow the standard COLMAP text format; each
+    camera in `cameras.txt` may declare its own intrinsics and distortion, so
+    multi-camera rigs are supported directly.
+  - `depths.txt` mirrors `images.txt` but holds the depth/LiDAR sensor poses;
+    it is optional and only needed when depth supervision is available.
+  - Train with the provided COLMAP config, passing the dataset directory as the
+    data path:
+    ```bash
+    ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/colmap/colmap_example.yaml data/colmap_dataset
+    # If ROS is installed, you can also run the following command:
+    # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/colmap/colmap_example.yaml data/colmap_dataset
+    ```
+  - Copy `config/colmap/colmap_example.yaml` to a per-scene config to override
+    the scene bounds, camera `scale`, and training hyper-parameters as needed.
 
 ### 4. Run
 
@@ -149,6 +191,11 @@ Our paper is accepted by ICRA 2025. If you use M2Mapping for your academic resea
     ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/color_poses.txt
     # If ROS is installed, you can also run the following command:
     # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/fast_livo/campus.yaml src/M2Mapping/data/FAST_LIVO2_RIM_Datasets/campus/color_poses.txt
+
+    # COLMAP-format dataset (see 3.4; pass the dataset directory as the data path)
+    ./src/M2Mapping/build/neural_mapping_node train src/M2Mapping/config/colmap/colmap_example.yaml src/M2Mapping/data/colmap_dataset
+    # If ROS is installed, you can also run the following command:
+    # rosrun neural_mapping neural_mapping_node train src/M2Mapping/config/colmap/colmap_example.yaml src/M2Mapping/data/colmap_dataset
 ```
 
 After running, the training and evaluation results will be saved in the `src/M2Mapping/output` directory.

@@ -9,8 +9,9 @@ struct R3live : Rosbag {
   explicit R3live(const std::filesystem::path &_bag_path,
                   const torch::Device &_device = torch::kCPU,
                   const bool &_preload = true, const float &_res_scale = 1.0,
-                  const int &_dataset_system_type = coords::SystemType::OpenCV)
-      : Rosbag(_bag_path, _device, _preload, _res_scale, _dataset_system_type) {
+                  const int &_ds_pt_num = 1e5)
+      : Rosbag(_bag_path, _device, _preload, _res_scale,
+               coords::SystemType::OpenCV, sensor::Sensors(), _ds_pt_num) {
     depth_type_ = DepthType::PLY;
 
     dataset_name_ = bag_path_.filename();

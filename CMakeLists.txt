@@ -12,6 +12,7 @@ set(CMAKE_CXX_FLAGS "-fPIC")
 add_definitions(-O3 -DWITH_CUDA -DTHRUST_IGNORE_CUB_VERSION_CHECK)
 
 option(ENABLE_ROS "Enable ROS support" OFF)
+option(ENABLE_BACKWARD "Enable backward-cpp stack trace handler" OFF)
 
 # Define installation directories based on build type
 if(ENABLE_ROS)
@@ -136,12 +137,28 @@ add_library(neural_mapping_lib include/neural_mapping/neural_mapping.cpp
 target_link_libraries(
   neural_mapping_lib
   ${OpenCV_LIBS}
-  dw
   data_loader
   neural_net
   rog_map_cuda
   tracer
   loss_utils)
 
+find_path(LIBDW_INCLUDE_DIR dwarf.h)
+find_library(LIBDW_LIBRARY dw)
+
 add_executable(neural_mapping_node src/neural_mapping_node.cpp)
 target_link_libraries(neural_mapping_node neural_mapping_lib)
+
+if(ENABLE_BACKWARD)
+  message(STATUS "backward-cpp stack trace handler enabled")
+  target_compile_definitions(neural_mapping_node PRIVATE ENABLE_BACKWARD)
+  if(LIBDW_INCLUDE_DIR AND LIBDW_LIBRARY)
+    message(STATUS "libdw found: enabling detailed stack traces")
+    target_link_libraries(neural_mapping_node ${LIBDW_LIBRARY})
+    target_compile_definitions(neural_mapping_node PRIVATE BACKWARD_HAS_DW=1)
+  else()
+    message(WARNING "libdw-dev not found; install it for detailed stack traces: sudo apt install libdw-dev")
+  endif()
+else()
+  message(STATUS "backward-cpp stack trace handler disabled (use -DENABLE_BACKWARD=ON to enable)")
+endif()

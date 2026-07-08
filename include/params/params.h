@@ -18,6 +18,10 @@ extern std::filesystem::path k_dataset_path;
 extern int k_ds_pt_num, k_max_pt_num;
 
 extern std::filesystem::path k_output_path, k_package_path;
+// Root that holds M2Mapping repo resources (config/ROG-Map, eval/*.py). Usually
+// equals k_package_path, but can be set explicitly via the `package_path`
+// config field when the config/output tree lives outside the source repo.
+extern std::filesystem::path k_source_path;
 
 extern torch::Device k_device;
 // parameter

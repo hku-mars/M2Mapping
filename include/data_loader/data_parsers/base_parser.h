@@ -36,6 +36,18 @@ void load_file_list(const std::string &dir_path,
                     const std::string &prefix,
                     const std::string &file_extension = ".ply");
 
+struct DataConfig {
+  std::filesystem::path color_path, color_pose_path, depth_path,
+      depth_pose_path, camera_path;
+  std::string color_type = ".jpg"; // default color type
+  DepthType depth_type;
+  int color_pose_type, depth_pose_type;
+  bool color_pose_w2c = false;
+};
+
+DataConfig read_params(const std::filesystem::path &_dataset_path,
+                       const std::filesystem::path &_config_path);
+
 struct DataParser {
   typedef std::shared_ptr<DataParser> Ptr;
   explicit DataParser(const std::string &_dataset_path,
@@ -43,49 +55,74 @@ struct DataParser {
                       const bool &_preload = true,
                       const float &_res_scale = 1.0,
                       const int &_dataset_system_type = 0,
-                      const sensor::Sensors &_sensor = sensor::Sensors())
+                      const sensor::Sensors &_sensor = sensor::Sensors(),
+                      const int &_ds_pt_num = 1e5,
+                      const float &_max_time_diff_camera_and_pose = 0.0f,
+                      const float &_max_time_diff_lidar_and_pose = 0.0f)
       : dataset_path_(_dataset_path), device_(_device), preload_(_preload),
         res_scale_(_res_scale), dataset_system_type_(_dataset_system_type),
-        sensor_(_sensor) {
+        sensor_(_sensor), ds_pt_num_(_ds_pt_num),
+        max_time_diff_camera_and_pose_(_max_time_diff_camera_and_pose),
+        max_time_diff_lidar_and_pose_(_max_time_diff_lidar_and_pose) {
           // you are supposed to call load_data() in the derived class
         };
 
   std::filesystem::path dataset_path_, dataset_name_;
-  std::filesystem::path pose_path_, calib_path_, color_path_, depth_path_;
+  std::filesystem::path color_pose_path_, calib_path_, color_path_, depth_path_,
+      camera_path_;
 
   std::filesystem::path eval_pose_path_, eval_color_path_, eval_depth_path_;
 
   torch::Device device_ = torch::kCPU;
-  torch::Tensor train_color_;     // [N, H, W, 3]
-  DepthSamples train_depth_pack_; // [N]
-  torch::Tensor depth_poses_, train_depth_poses_, color_poses_,
-      train_color_poses_;                             // [N, 3, 4]
+  torch::Tensor train_color_;                                   // [N, H, W, 3]
+  DepthSamples train_depth_pack_;                               // [N]
+  torch::Tensor depth_poses_, train_depth_poses_, color_poses_; // [N, 3, 4]
+
+  std::map<int, sensor::Cameras> cameras_; // [N]
+
   torch::Tensor time_stamps_;                         // [N]
   torch::Tensor eval_color_poses_, eval_depth_poses_; // [N, 4, 4]
   int dataset_system_type_;
   sensor::Sensors sensor_;
   bool preload_;
   float res_scale_;
-  int depth_type_ = DepthType::Image; // 0: image; 1: ply; 2: bin; 3: pcd
+
+  std::string color_type_ = ".jpg";
+  DepthType depth_type_ = DepthType::Image; // 0: image; 1: ply; 2: bin; 3: pcd
   torch::Tensor
       T_B_S_; // [4, 4]; extrinsic param, transformation from sensor to body
   torch::Tensor T_S_B_;
 
   std::vector<std::filesystem::path> raw_color_filelists_, raw_depth_filelists_,
-      train_color_filelists_, train_depth_filelists_, eval_color_filelists_,
-      eval_depth_filelists_;
+      train_depth_filelists_, eval_color_filelists_, eval_depth_filelists_;
+  std::vector<int> color_camera_ids_, train_to_raw_map_ids_,
+      eval_to_raw_map_ids_;
 
-  float color_scale_inv_ = 1.0 / 255.0;
-  float depth_scale_inv_ = 1e-3;
+  float color_scale_inv_ = 1.0f / 255.0f;
+  float depth_scale_inv_ = 1e-3f;
 
+  float max_time_diff_camera_and_pose_, max_time_diff_lidar_and_pose_ = 0.0f;
+  int ds_pt_num_;
+
+  torch::Tensor mask = torch::Tensor();
+
+  virtual sensor::Cameras get_camera(const int &idx,
+                                     const int &pose_type) const;
   virtual torch::Tensor get_pose(const int &idx, const int &pose_type) const;
 
   virtual torch::Tensor get_pose(const torch::Tensor &idx,
                                  const int &pose_type) const;
 
-  virtual torch::Tensor get_image(const int &idx, const int &image_type) const;
+  virtual torch::Tensor get_image(const int &idx, const int &image_type,
+                                  const float &scale = 1.0f) const;
   virtual torch::Tensor get_image(const torch::Tensor &idx,
-                                  const int &image_type) const;
+                                  const int &image_type,
+                                  const float &scale = 1.0f) const;
+  virtual torch::Tensor get_color_image(const std::string &file_path,
+                                        const int &image_type,
+                                        const float &scale = 1.0) const;
+  virtual torch::Tensor cv_mat_to_tensor(cv::Mat color_mat,
+                                         const float &scale) const;
 
   size_t size(const int &data_type) const {
     switch (data_type) {
@@ -96,7 +133,7 @@ struct DataParser {
       return raw_depth_filelists_.size();
     }
     case DataType::TrainColor: {
-      return train_color_filelists_.size();
+      return train_to_raw_map_ids_.size();
     }
     case DataType::TrainDepth: {
       return train_depth_filelists_.size();
@@ -117,6 +154,8 @@ struct DataParser {
 
   std::filesystem::path get_file(const int &idx, const int &image_type = 0);
   cv::Mat get_image_cv_mat(const int &idx, const int &image_type = 0) const;
+  cv::Mat get_image_cv_mat(const std::string &file_path,
+                           const int &image_type) const;
   torch::Tensor get_color_image(const int &idx, const int &image_type = 0,
                                 const float &scale = 1.0) const;
   torch::Tensor get_depth_image(const int &idx) const;
@@ -173,13 +212,16 @@ struct DataParser {
     return true;
   }
 
-  virtual std::vector<torch::Tensor> load_poses(const std::string &pose_path,
-                                                const bool &with_head,
-                                                const int &pose_type = 0);
+  virtual std::map<int, sensor::Cameras>
+  load_cameras(const std::string &camera_path);
 
-  virtual void load_intrinsics() {
-    throw std::runtime_error("Not implemented");
-  }
+  virtual std::tuple<torch::Tensor, torch::Tensor,
+                     std::vector<std::filesystem::path>, std::vector<int>>
+  load_poses(const std::string &pose_path, const bool &with_head,
+             const int &pose_type = 0, bool skip_line = false,
+             std::string filter_name = "", bool inverse = false);
+
+  virtual void load_intrinsics();
 
   virtual void
   align_pose_sensor(std::vector<std::filesystem::path> &out_filelsits,
@@ -190,10 +232,12 @@ struct DataParser {
                            const std::string &prefix = "",
                            const bool eval = false, const bool &llff = false);
 
-  virtual void load_depths(const std::string &file_extension,
+  virtual void load_depths(const DepthType& depth_type,
                            const std::string &prefix = "",
                            const bool eval = false, const bool &llff = false);
 
   virtual std::string get_gt_mesh_path() { return ""; }
+
+  void post_process(int skip_first_num);
 };
 } // namespace dataparser

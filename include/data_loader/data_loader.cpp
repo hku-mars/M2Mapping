@@ -6,6 +6,7 @@
 #include "utils/bin_utils/endian.h"
 #include "utils/ray_utils/ray_utils.h"
 
+#include "data_loader/data_parsers/colmap_parser.hpp"
 #include "data_loader/data_parsers/fastlivo_parser.hpp"
 #include "data_loader/data_parsers/kitti_parser.hpp"
 #include "data_loader/data_parsers/oxford_spires_parser.hpp"
@@ -23,38 +24,49 @@ enum DatasetType {
   Kitti = 3,
   Fastlivo = 4,
   Spires = 5,
+  Colmap = 6,
 };
 
 namespace dataloader {
 DataLoader::DataLoader(const std::string &dataset_path,
+                       const std::filesystem::path &_config_path,
                        const int &_dataset_type, const torch::Device &_device,
                        const bool &_preload, const float &_res_scale,
-                       const sensor::Sensors &_sensor)
+                       const sensor::Sensors &_sensor, const int &_ds_pt_num,
+                       const float &_max_time_diff_camera_and_pose,
+                       const float &_max_time_diff_lidar_and_pose)
     : dataset_type_(_dataset_type), device_(_device) {
   switch (dataset_type_) {
   case DatasetType::NeuralRGBD:
     dataparser_ptr_ = std::make_shared<dataparser::NeuralRGBD>(
-        dataset_path, device_, _preload, _res_scale, 0);
+        dataset_path, device_, _preload, _res_scale, 0, _ds_pt_num);
     break;
   case DatasetType::Replica:
     dataparser_ptr_ = std::make_shared<dataparser::Replica>(
-        dataset_path, device_, _preload, _res_scale);
+        dataset_path, device_, _preload, _res_scale, _ds_pt_num);
     break;
   case DatasetType::R3live:
     dataparser_ptr_ = std::make_shared<dataparser::R3live>(
-        dataset_path, device_, _preload, _res_scale);
+        dataset_path, device_, _preload, _res_scale, _ds_pt_num);
     break;
   case DatasetType::Kitti:
-    dataparser_ptr_ = std::make_shared<dataparser::Kitti>(dataset_path, device_,
-                                                          _preload, _res_scale);
+    dataparser_ptr_ = std::make_shared<dataparser::Kitti>(
+        dataset_path, device_, _preload, _res_scale, _ds_pt_num);
     break;
   case DatasetType::Fastlivo:
     dataparser_ptr_ = std::make_shared<dataparser::Fastlivo>(
-        dataset_path, device_, _preload, _res_scale, _sensor);
+        dataset_path, device_, _preload, _res_scale, _sensor, _ds_pt_num);
     break;
   case DatasetType::Spires:
     dataparser_ptr_ = std::make_shared<dataparser::Spires>(
-        dataset_path, device_, _preload, _res_scale, _sensor);
+        dataset_path, device_, _preload, _res_scale, _sensor, _ds_pt_num,
+        _max_time_diff_camera_and_pose, _max_time_diff_lidar_and_pose);
+    break;
+  case DatasetType::Colmap:
+    dataparser_ptr_ = std::make_shared<dataparser::Colmap>(
+        dataset_path, _config_path, device_, _preload, _res_scale, _sensor,
+        _ds_pt_num, _max_time_diff_camera_and_pose,
+        _max_time_diff_lidar_and_pose);
     break;
   default:
     throw std::runtime_error("Unsupported dataset type");
@@ -245,7 +257,7 @@ int DataLoader::export_image(std::filesystem::path &colmap_sparse_path,
 
     std::ofstream *tmp_pose_file;
     std::filesystem::path *tmp_file_path;
-    if (llff && (i % 8 == 0)) {
+    if (llff && ((i + 1) % 8 == 0)) {
       tmp_pose_file = &test_colmap_color_pose_file;
       tmp_file_path = &test_colmap_color_file_path;
     } else {
@@ -386,7 +398,8 @@ void DataLoader::export_as_colmap_format(bool bin, bool llff) {
 
   // constraint the number of points to avoid OOM in 3DGS
   auto train_depth_xyz = dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3});
-  int sample_step = train_depth_xyz.size(0) / 100000.f;
+  float downsample_pt_num = 2e6f;
+  int sample_step = train_depth_xyz.size(0) / downsample_pt_num;
   sample_step = std::max(sample_step, 1);
   auto points = train_depth_xyz.slice(0, 0, -1, sample_step).to(torch::kDouble);
 
@@ -475,7 +488,8 @@ void DataLoader::export_as_colmap_format_for_nerfstudio(bool bin) {
   // constraint the number of points to avoid OOM in 3DGS
 
   auto train_depth_xyz = dataparser_ptr_->train_depth_pack_.xyz.view({-1, 3});
-  int sample_step = train_depth_xyz.size(0) / 100000.f;
+  float downsample_pt_num = 2e6f;
+  int sample_step = train_depth_xyz.size(0) / downsample_pt_num;
   sample_step = std::max(sample_step, 1);
   auto points = train_depth_xyz.slice(0, 0, -1, sample_step).to(torch::kDouble);
 

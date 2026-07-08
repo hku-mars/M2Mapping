@@ -1,0 +1,62 @@
+%YAML:1.0
+
+base_config: "../base.yaml"
+
+preload: 1 # 0: disable; 1: enable # accelerate the loading process but will cost more memory
+llff: 1 # 0: disable; 1: enable; every 8 frame will be used for evaluation
+prob_map_en: 1 # 0: disable; 1: enable; Whether the map is a probabilistic map
+
+# dataset_type
+#   Replica = 0,
+#   R3live = 1,
+#   NeuralRGBD = 2,
+#   KITTI = 3,
+#   FastLivo = 4,
+#   Oxford Spires = 5,
+#   Colmap = 6
+dataset_type: 6
+dir_embedding_degree: 4
+
+camera_path: "sparse/0/cameras.txt"
+color_path: "images"
+color_type: ".png"
+color_pose_path: "sparse/0/images.txt"
+color_pose_type: 4
+color_pose_w2c: 1
+depth_path: "depths"
+depth_pose_path: "sparse/0/depths.txt"
+depth_pose_type: 4
+depth_type: 1 # 0: image; 1: ply; 2: bin; 3: pcd
+
+iter_step: 20000
+
+trace_iter: 100 # sphere tracing iteration times (required: divides color_batch_pt_num)
+
+min_range: 0.01
+max_range: 100
+ds_pt_num: 10000 # downsampled point number
+max_pt_num: 1000000
+
+outlier_remove: 1 # unnecessary for static scenes
+outlier_dist: 0.05
+outlier_removal_interval: 2000
+
+# scene config
+leaf_sizes: 0.2
+fill_level: 1
+bce_sigma: 1.0 # if get floaters, increase this value
+sphere_trace_thr: 1e-3
+
+# visualization
+vis_attribute: 2 # 0: disable to save storage; 1: normal; 2: color
+vis_resolution: 0.1 # better no more than leaf_sizes or will miss faces
+export_resolution: 0.04
+fps: 10
+
+# This is the camera configuration; scale adjusts training resolution (e.g. 0.5 = half resolution).
+# Intrinsics are loaded automatically from camera_path (cameras.txt).
+camera:
+   scale: 0.5
+
+map:
+   map_size: 300

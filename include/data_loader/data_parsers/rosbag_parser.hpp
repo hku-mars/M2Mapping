@@ -16,15 +16,16 @@ struct Rosbag : DataParser {
                   const torch::Device &_device = torch::kCPU,
                   const bool &_preload = true, const float &_res_scale = 1.0,
                   const int &_dataset_system_type = coords::SystemType::OpenCV,
-                  const sensor::Sensors &_sensor = sensor::Sensors())
+                  const sensor::Sensors &_sensor = sensor::Sensors(),
+                  const int &_ds_pt_num = 1e5)
       : DataParser(_bag_path.parent_path(), _device, _preload, _res_scale,
-                   _dataset_system_type, _sensor),
+                   _dataset_system_type, _sensor, _ds_pt_num),
         bag_path_(_bag_path) {
 
     dataset_name_ = bag_path_.filename();
     dataset_name_ = dataset_name_.replace_extension();
 
-    pose_path_ = dataset_path_ / "color_poses.txt";
+    color_pose_path_ = dataset_path_ / "color_poses.txt";
     depth_pose_path_ = dataset_path_ / "depth_poses.txt";
     color_path_ = dataset_path_ / "images";
     depth_path_ = dataset_path_ / "depths";
@@ -86,7 +87,7 @@ struct Rosbag : DataParser {
     sensor_msgs::PointCloud2ConstPtr depth_msg_ptr;
     int depth_count = 0;
 
-    std::ofstream color_pose_file(pose_path_);
+    std::ofstream color_pose_file(color_pose_path_);
     std::ofstream depth_pose_file(depth_pose_path_);
     for (const rosbag::MessageInstance &m : view) {
       count++;
@@ -242,7 +243,7 @@ struct Rosbag : DataParser {
 #endif
 
   void load_data() override {
-    if (!std::filesystem::exists(pose_path_) ||
+    if (!std::filesystem::exists(color_pose_path_) ||
         !std::filesystem::exists(depth_pose_path_) ||
         !std::filesystem::exists(color_path_) ||
         !std::filesystem::exists(depth_path_)) {
@@ -254,14 +255,18 @@ struct Rosbag : DataParser {
 #endif
     }
 
-    color_poses_ = load_poses(pose_path_, false, 0)[0];
+    color_poses_ = std::get<0>(load_poses(color_pose_path_, false, 0));
     TORCH_CHECK(color_poses_.size(0) > 0);
-    depth_poses_ = load_poses(depth_pose_path_, false, 0)[0];
+    cameras_[0] = sensor_.camera;
+    cameras_[0].distortion_ = false;
+    color_camera_ids_.resize(color_poses_.size(0), 0);
+
+    depth_poses_ = std::get<0>(load_poses(depth_pose_path_, false, 0));
     TORCH_CHECK(depth_poses_.size(0) > 0);
 
     load_colors(".png", "", false, true);
     TORCH_CHECK(color_poses_.size(0) == raw_color_filelists_.size());
-    load_depths(".ply", "", false, true);
+    load_depths(depth_type_, "", false, true);
     TORCH_CHECK(depth_poses_.size(0) == raw_depth_filelists_.size());
   }
 

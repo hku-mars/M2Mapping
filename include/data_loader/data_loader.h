@@ -10,11 +10,15 @@ class DataLoader {
 public:
   typedef std::shared_ptr<DataLoader> Ptr;
   explicit DataLoader(const std::string &dataset_path,
+                      const std::filesystem::path &_config_path,
                       const int &_dataset_type = 0,
                       const torch::Device &_device = torch::kCPU,
                       const bool &_preload = false,
                       const float &_res_scale = 1.0,
-                      const sensor::Sensors &_sensor = sensor::Sensors());
+                      const sensor::Sensors &_sensor = sensor::Sensors(),
+                      const int &_ds_pt_num = 1e5,
+                      const float &_max_time_diff_camera_and_pose = 0.0f,
+                      const float &_max_time_diff_lidar_and_pose = 0.0f);
 
   // Base paths.
   // std::string calib_path_, poses_path_;

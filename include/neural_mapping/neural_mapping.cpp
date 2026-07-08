@@ -32,8 +32,9 @@ NeuralSLAM::NeuralSLAM(const int &mode,
   read_params(_config_path, _data_path, mode);
 
   data_loader_ptr = std::make_unique<dataloader::DataLoader>(
-      k_dataset_path, k_dataset_type, k_device, mode & k_preload, k_res_scale,
-      k_sensor);
+      k_dataset_path, _config_path, k_dataset_type, k_device, mode & k_preload,
+      k_res_scale, k_sensor, k_ds_pt_num, k_max_time_diff_camera_and_pose,
+      k_max_time_diff_lidar_and_pose);
   if (k_export_colmap_format == 1) {
     data_loader_ptr->export_as_colmap_format(false, false);
   } else if (k_export_colmap_format == 2) {
@@ -427,7 +428,7 @@ void NeuralSLAM::train_callback(const int &_iter,
 
 void NeuralSLAM::prefilter_data(const bool &export_img) {
   std::vector<int> valid_ids_vec;
-  std::vector<std::filesystem::path> filtered_train_color_filelists;
+  std::vector<int> filtered_train_to_raw_map_ids;
   int color_size =
       data_loader_ptr->dataparser_ptr_->size(dataparser::DataType::TrainColor);
 
@@ -436,9 +437,8 @@ void NeuralSLAM::prefilter_data(const bool &export_img) {
                        ->get_image(0, dataparser::DataType::TrainColor)
                        .to(k_device);
   valid_ids_vec.emplace_back(0);
-  filtered_train_color_filelists.emplace_back(
-      data_loader_ptr->dataparser_ptr_->get_file(
-          0, dataparser::DataType::TrainColor));
+  filtered_train_to_raw_map_ids.emplace_back(
+      data_loader_ptr->dataparser_ptr_->train_to_raw_map_ids_[0]);
 
   std::filesystem::path fileter_color_path = k_output_path / "filter";
   if (export_img) {
@@ -466,9 +466,8 @@ void NeuralSLAM::prefilter_data(const bool &export_img) {
                                    now_color.permute({2, 0, 1}).unsqueeze(0));
     if (metric < k_prefilter) {
       valid_ids_vec.emplace_back(i);
-      filtered_train_color_filelists.emplace_back(
-          data_loader_ptr->dataparser_ptr_->get_file(
-              i, dataparser::DataType::TrainColor));
+      filtered_train_to_raw_map_ids.emplace_back(
+          data_loader_ptr->dataparser_ptr_->train_to_raw_map_ids_[i]);
       pre_color = now_color;
 
       if (export_img) {
@@ -483,17 +482,10 @@ void NeuralSLAM::prefilter_data(const bool &export_img) {
     }
   }
 
-  data_loader_ptr->dataparser_ptr_->train_color_filelists_ =
-      filtered_train_color_filelists;
+  data_loader_ptr->dataparser_ptr_->train_to_raw_map_ids_ =
+      filtered_train_to_raw_map_ids;
 
   auto valid_ids = torch::tensor(valid_ids_vec);
-  auto reshape_color_pose_sizes =
-      data_loader_ptr->dataparser_ptr_->train_color_poses_.sizes().vec();
-  reshape_color_pose_sizes[0] = -1;
-  data_loader_ptr->dataparser_ptr_->train_color_poses_ =
-      data_loader_ptr->dataparser_ptr_->train_color_poses_
-          .index_select(0, valid_ids)
-          .reshape(reshape_color_pose_sizes);
   if (k_preload) {
     auto reshape_color_sizes =
         data_loader_ptr->dataparser_ptr_->train_color_.sizes().vec();
@@ -507,7 +499,7 @@ void NeuralSLAM::prefilter_data(const bool &export_img) {
   std::cout << "Original color size: " << color_size << ", after filtering: "
             << data_loader_ptr->dataparser_ptr_->size(
                    dataparser::DataType::TrainColor)
-            << std::endl;
+            << "\n";
 }
 
 /**
@@ -583,7 +575,7 @@ bool NeuralSLAM::build_occ_map() {
   //----------------------------------------------------------------------
   if (k_prob_map_en) {
     // Initialize ROG-Map configuration
-    auto rog_map_cfg_file = k_package_path / "config/ROG-Map/rog.yaml";
+    auto rog_map_cfg_file = k_source_path / "config/ROG-Map/rog.yaml";
     std::cout << "Loading ROG-Map config from: " << rog_map_cfg_file
               << std::endl;
 
@@ -1172,7 +1164,7 @@ void NeuralSLAM::render_path(std::string pose_file, std::string camera_file,
   std::cout << "camera_file: " << camera_file << '\n';
   torch::NoGradGuard no_grad;
   auto poses =
-      data_loader_ptr->dataparser_ptr_->load_poses(pose_file, false, 0)[0];
+      std::get<0>(data_loader_ptr->dataparser_ptr_->load_poses(pose_file, false, 0));
   if (poses.size(0) == 0) {
     std::cout << "poses is empty" << std::endl;
     return;
@@ -1433,7 +1425,7 @@ float NeuralSLAM::export_test_image(int idx, const std::string &prefix) {
 
     // eval color
     c10::cuda::CUDACachingAllocator::emptyCache();
-    auto eval_python_cmd = "python3 " + k_package_path.string() +
+    auto eval_python_cmd = "python3 " + k_source_path.string() +
                            "/eval/image_metrics/metrics_single.py --gt_color " +
                            (gt_color_path / gt_color_file_name).string() +
                            " --renders_color " +
@@ -1491,7 +1483,7 @@ void NeuralSLAM::eval_mesh() {
   auto gt_mesh_path = data_loader_ptr->dataparser_ptr_->get_gt_mesh_path();
   if (std::filesystem::exists(gt_mesh_path)) {
     c10::cuda::CUDACachingAllocator::emptyCache();
-    auto eval_python_cmd = "python3 " + k_package_path.string() +
+    auto eval_python_cmd = "python3 " + k_source_path.string() +
                            "/eval/structure_metrics/evaluator.py --pred_mesh " +
                            k_output_path.string();
     if (k_cull_mesh) {
@@ -1516,7 +1508,7 @@ void NeuralSLAM::eval_mesh() {
 
 void NeuralSLAM::eval_render() {
   c10::cuda::CUDACachingAllocator::emptyCache();
-  auto eval_python_cmd = "python3 " + k_package_path.string() +
+  auto eval_python_cmd = "python3 " + k_source_path.string() +
                          "/eval/image_metrics/metrics.py -m " +
                          (k_output_path / "train/color").string();
   std::cout << BLUE
@@ -1524,7 +1516,7 @@ void NeuralSLAM::eval_render() {
             << "\033[0m\n";
   int ret = std::system(eval_python_cmd.c_str());
 
-  eval_python_cmd = "python3 " + k_package_path.string() +
+  eval_python_cmd = "python3 " + k_source_path.string() +
                     "/eval/image_metrics/metrics.py -m " +
                     (k_output_path / "eval/color").string();
   std::cout << BLUE
@@ -1532,7 +1524,7 @@ void NeuralSLAM::eval_render() {
             << "\033[0m\n";
   ret = std::system(eval_python_cmd.c_str());
 
-  eval_python_cmd = "python3 " + k_package_path.string() +
+  eval_python_cmd = "python3 " + k_source_path.string() +
                     "/eval/image_metrics/metrics.py -m " +
                     (k_output_path / "test/color").string();
   std::cout << BLUE
@@ -1553,7 +1545,7 @@ void NeuralSLAM::export_timing(bool print) {
 
 void NeuralSLAM::plot_log(const std::string &log_file) {
   c10::cuda::CUDACachingAllocator::emptyCache();
-  auto cmd = "python3 " + k_package_path.string() + "/eval/draw_loss.py -l " +
+  auto cmd = "python3 " + k_source_path.string() + "/eval/draw_loss.py -l " +
              (k_output_path / log_file).string();
   std::cout << BLUE << "Conducting draw_loss command: " << cmd << "\033[0m\n";
   auto ret = std::system(cmd.c_str());
@@ -1766,7 +1758,7 @@ bool NeuralSLAM::end() {
     if (std::filesystem::is_regular_file(k_dataset_path)) {
       dataset_path = k_dataset_path.parent_path();
     }
-    auto eval_python_cmd = "python " + k_package_path.string() +
+    auto eval_python_cmd = "python " + k_source_path.string() +
                            "/eval/inter_poses.py --data_dir " +
                            dataset_path.string() +
                            " --key_poses skip --skip 50 --n_out_poses 500";
