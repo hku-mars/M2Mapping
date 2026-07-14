@@ -1750,6 +1750,17 @@ bool NeuralSLAM::end() {
   if (k_rgb_weight > 0) {
     c10::cuda::CUDACachingAllocator::emptyCache();
     render_path(false, k_fps);
+
+    // COLMAP inputs used by the NVS adapters deliberately provide only the
+    // training views (llff: 0).  They do not contain M2Mapping's legacy
+    // color_poses.txt format, so the native test-split evaluation and
+    // interpolated fly-through below are neither defined nor required for
+    // the train-view metric contract.
+    if (k_dataset_type == 6) {
+      exit(0);
+      return true;
+    }
+
     render_path(true, 2);
     eval_render();
 
