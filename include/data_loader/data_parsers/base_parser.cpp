@@ -832,7 +832,7 @@ void DataParser::load_colors(const std::string &file_extension,
 
     int train_color_num;
     if (llff) {
-      int eval_num = raw_color_num / 8 - 1;
+      int eval_num = (raw_color_num + 7) / 8;
       train_color_num = raw_color_num - eval_num;
     } else {
       train_color_num = raw_color_num;
@@ -843,8 +843,8 @@ void DataParser::load_colors(const std::string &file_extension,
     for (int i = 0; i < raw_color_num; i++) {
       auto pose = get_pose(i, DataType::RawColor).slice(0, 0, 3);
       if (llff) {
-        if ((i + 1) % 8 != 0) {
-          train_to_raw_map_ids_[i - i / 8] = i;
+        if (i % 8 != 0) {
+          train_to_raw_map_ids_[i - i / 8 - 1] = i;
         }
       } else {
         train_to_raw_map_ids_[i] = i;
@@ -860,8 +860,8 @@ void DataParser::load_colors(const std::string &file_extension,
         auto color = get_color_image(i, DataType::RawColor);
         auto pose = get_pose(i, DataType::RawColor).slice(0, 0, 3);
         if (llff) {
-          if ((i + 1) % 8 != 0) {
-            train_color_.index_put_({i - i / 8}, color);
+          if (i % 8 != 0) {
+            train_color_.index_put_({i - i / 8 - 1}, color);
           }
         } else {
           train_color_.index_put_({i}, color);
@@ -907,7 +907,7 @@ void DataParser::load_depths(const DepthType& depth_type,
 
     int train_depth_num;
     if (llff) {
-      int eval_num = raw_depth_num / 8 - 1;
+      int eval_num = (raw_depth_num + 7) / 8;
       train_depth_num = raw_depth_num - eval_num;
     } else {
       train_depth_num = raw_depth_num;
@@ -970,15 +970,15 @@ void DataParser::load_depths(const DepthType& depth_type,
 
         auto xyz = direction * depth + pos;
         if (llff) {
-          if ((i + 1) % 8 != 0) {
-            train_depth_pack_.depth.index_put_({i - i / 8}, depth);
-            train_depth_pack_.direction.index_put_({i - i / 8}, direction);
-            train_depth_pack_.xyz.index_put_({i - i / 8}, xyz);
+          if (i % 8 != 0) {
+            train_depth_pack_.depth.index_put_({i - i / 8 - 1}, depth);
+            train_depth_pack_.direction.index_put_({i - i / 8 - 1}, direction);
+            train_depth_pack_.xyz.index_put_({i - i / 8 - 1}, xyz);
 
-            train_depth_pack_.origin.index_put_({i - i / 8}, pos.view({1, 3}));
+            train_depth_pack_.origin.index_put_({i - i / 8 - 1}, pos.view({1, 3}));
 
-            train_depth_poses_.index_put_({i - i / 8}, pose);
-            train_depth_filelists_[i - i / 8] = raw_depth_filelists_[i];
+            train_depth_poses_.index_put_({i - i / 8 - 1}, pose);
+            train_depth_filelists_[i - i / 8 - 1] = raw_depth_filelists_[i];
           }
         } else {
           train_depth_pack_.depth.index_put_({i}, depth);

@@ -1756,7 +1756,7 @@ bool NeuralSLAM::end() {
     // color_poses.txt format, so the native test-split evaluation and
     // interpolated fly-through below are neither defined nor required for
     // the train-view metric contract.
-    if (k_dataset_type == 6) {
+    if (k_dataset_type == 6 && !k_llff) {
       exit(0);
       return true;
     }

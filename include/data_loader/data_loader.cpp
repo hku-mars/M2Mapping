@@ -210,7 +210,7 @@ int DataLoader::export_image(std::filesystem::path &colmap_sparse_path,
     uint64_t num_reg_images = dataparser_ptr_->size(data_type);
     uint64_t test_num = 0;
     if (llff) {
-      test_num = num_reg_images / 8 + 1;
+      test_num = (num_reg_images + 7) / 8;
       num_reg_images -= test_num;
     }
     colmap::WriteBinaryLittleEndian<uint64_t>(&colmap_color_pose_file,
@@ -257,7 +257,7 @@ int DataLoader::export_image(std::filesystem::path &colmap_sparse_path,
 
     std::ofstream *tmp_pose_file;
     std::filesystem::path *tmp_file_path;
-    if (llff && ((i + 1) % 8 == 0)) {
+    if (llff && (i % 8 == 0)) {
       tmp_pose_file = &test_colmap_color_pose_file;
       tmp_file_path = &test_colmap_color_file_path;
     } else {
